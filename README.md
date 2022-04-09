@@ -1,4 +1,4 @@
-# upath-prochestrator-soa
+# UiPath processes in a SOA
 Exposes Orchestrator processes as REST APIs, including CRUD when certain criteria are met
 
 ## Running the server
