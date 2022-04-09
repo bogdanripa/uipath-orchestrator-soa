@@ -41,7 +41,7 @@ Refreshes the list of folders and processes
 
 Returns a list of root folders
 
-`GET http://localhost:8081/ORGID/TENANTNAME/folders/FOLDERA`
+`GET http://localhost:8081/ORGID/TENANTNAME/folders/FOLDERA/`
 
 Returns a list of sub-folders for "FOLDERA", together with a list of processes available in that folder
 
