@@ -9,9 +9,13 @@ node index.js
 2. Enter your Orchestrator API credentials. These can be found in https://cloud.uipath.com/ -> Admin -> Expand your tenant -> Click the Orchestrator API icon
 3. Click submit
 
+Alternatively you can call the "http://localhost:8081/auth" API endpoint just like we call it in "auth.html".
+
 ## How to use
-Once authenticated, go to http://localhost:8081/ORGID/TENANTNAME/docs/ for the auto-generated swagger documenation
+Once authenticated, go to http://localhost:8081/ORGID/TENANTNAME/docs/ for the auto-generated swagger documenation.
+
 Go to http://localhost:8081/ORGID/TENANTNAME/folders.html to browse through your folders and processes in your browser.
+
 When viewing a process, you will be able to start it right from your browser. 
 
 !Important!
