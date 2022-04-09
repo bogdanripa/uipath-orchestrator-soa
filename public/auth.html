@@ -1,0 +1,74 @@
+<html>
+	<head>
+		<title>Auth with your UiPath Cloud details</title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+		<script src=
+"https://cdnjs.cloudflare.com/ajax/libs/jquery-cookie/1.4.1/jquery.cookie.js"></script>
+		<script>
+
+			function waitFullLoad() {
+				$.get('/' + localStorage.orgId + '/' + localStorage.tenantName +'/status')
+					.done((data) => {
+						if (data.status == 'loaded')
+							document.location.href = '/' + localStorage.orgId + '/' + localStorage.tenantName + '/docs/';
+						else
+							setTimeout(waitFullLoad, 1000)
+					})
+					.fail(() => {
+						setTimeout(waitFullLoad, 1000)
+					});
+			}
+
+			$(() =>{
+				$("input[name='userKey']").val(localStorage.userKey);
+				$("input[name='orgId']").val(localStorage.orgId);
+				$("input[name='tenantName']").val(localStorage.tenantName);
+				$("input[name='clientId']").val(localStorage.clientId);
+				$("input[type='button']").click(() => {
+					localStorage.userKey = $("input[name='userKey']").val();
+					localStorage.orgId = $("input[name='orgId']").val();
+					localStorage.tenantName = $("input[name='tenantName']").val();
+					localStorage.clientId = $("input[name='clientId']").val();
+
+					$('form').hide();
+					$("#loading").show();
+
+					$.post('/' + localStorage.orgId + '/' + localStorage.tenantName +'/auth', $("form").serialize())
+						.done((data) => {
+						    $.cookie('authToken', data.authToken);
+						    waitFullLoad();
+						})
+						.fail((xhr, status, error) => {
+							$('form').show();
+						    $("#loading").hide();
+							alert(error);
+						});
+
+				});
+			});
+		</script>
+		<style>
+			input[type='text'] {
+				width: 30em;
+			}
+			div {
+				margin-bottom: 0.5em;
+			}
+		</style>
+	</head>
+	<body>
+		<form>
+			<label>User Key:</label>
+			<div><input type="text" name="userKey"/></div>
+			<label>Organization ID:</label>
+			<div><input type="text" name="orgId"/></div>
+			<label>Tenant Name:</label>
+			<div><input type="text" name="tenantName"/></div>
+			<label>Client ID:</label>
+			<div><input type="text" name="clientId"/></div>
+			<hr>
+			<input type="button" value="Save"/>
+		</form>
+		<div id="loading" style="display: none">Loading...</div>
+	</body>
+</html>

@@ -1,0 +1,42 @@
+<html>
+	<head>
+		<title></title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.js"></script>
+		<script src="/js/process.js"></script>
+		<style>
+			#proces {display: none}
+		</style>
+	</head>
+	<body>
+		<div id="loading">Loading...</div>
+		<div id="proces">
+			<h1>{{processName}}</h1>
+			<form method="post" action="{{processName}}">
+				{{#each arguments.input}} 
+					<label>{{name}}:</label>
+					{{#contains "Int" type}}
+					    <div><input type="number" name="{{name}}"/></div>
+					{{else contains "Double" type}}
+					    <div><input type="number" name="{{name}}"/></div>
+					{{else contains "Bool" type}}
+						<div>
+							<input type="radio" name="{{name}}" value="true" checked="checked"/> 
+							True
+							<input type="radio" name="{{name}}" value="false"/>
+							False
+						</div>
+					{{else}}
+					    <div><input type="text" name="{{name}}"/></div>
+					{{/contains}}
+				{{/each}}
+				<hr/>
+				<label>Callback URL:</label><div><input type="text" name="_callBackURL" placeholder="https://"/></div>
+				<hr/>
+				<input type="submit"/>
+			</form>
+		</div>
+		<hr>
+		<a id="swagger" href="{{swaggerUrl}}">Swagger</a>
+	</body>
+</html>

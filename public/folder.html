@@ -1,0 +1,35 @@
+<html>
+	<head>
+		<title></title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.js"></script>
+		<script src="/js/folder.js"></script>
+		<style>
+			#folders {display: none}
+			#folders a {font-weight: bold;}
+			#processes {display: none}
+		</style>
+	</head>
+	<body>
+		<div id="loading">Loading...</div>
+		<div id="folders">
+			<h2>Folders:</h2>
+			<ul>
+				<li><a href="{{parentName}}">..</a></li>
+				{{#each folders}} 
+					<li><a href="{{../fName}}/{{this}}.html">{{this}}</a></li>
+				{{/each}}
+			</ul>
+		</div>
+		<div id="processes">
+			<h2>Processes:</h2>
+			<ul>
+			{{#each processes}} 
+				<li><a href="{{../fName}}/{{this}}.html">{{this}}</a></li>
+			{{/each}}
+			</ul>
+		</div>
+		<hr>
+		<a id="swagger" href="{{swaggerUrl}}">Swagger</a>
+	</body>
+</html>
