@@ -12,7 +12,7 @@ const app = express();
 const port = 8081;
 
 var instances = {};
-var callBacks = [];
+var callBacks = {};
 
 function refreshInstanceTime(ad) {
 	if (instances[ad.authToken])
@@ -434,8 +434,8 @@ function processCallBacks() {
 					if (response.Result)
 						response.Result = cleanUpEntities(response.Result);
 					if (!callBacks[jobId].res) {
-
 						// async
+						request.post(callBacks[jobId].callBackURL, response.Result?response.Result:response);
 					} else {
 						//sync
 						var s = 200;
