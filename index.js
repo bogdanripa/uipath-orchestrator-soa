@@ -17,14 +17,14 @@ var callBacks = {};
 
 function getAuthDetails(req) {
 	var authToken;
-	if (req.cookies && req.cookies.authToken)
+	if (req.authToken)
+		authToken = req.authToken;
+	else if (req.cookies && req.cookies.authToken)
 		authToken = req.cookies.authToken
-	else {
-		if (req.headers && req.headers.authorization)
-			authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
-		else
-			authToken = "";
-	}
+	else if (req.headers && req.headers.authorization)
+		authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
+	else
+		authToken = "";
 
 	if (authToken && instances[authToken])
 		instances[authToken].lastAccessed = Date.now();
@@ -80,13 +80,13 @@ function getJobStatus(req, res, cb) {
 			if (res)
 				res.type('json').send(response);
 			else
-				cb(response);
+				cb(ad.id, response);
 		})
 		.catch((err) => {
 			if (res)
 				res.type('json').status(500).send({error: err});
 			else
-				cb({finished: true, error: err});
+				cb(ad.id, {finished: true, error: err});
 		});
 }
 
@@ -104,17 +104,20 @@ function startProcess(ad, orchestrator, process, req, res) {
 			var rReq = {
 				params: {
 					orgId: ad.orgId,
-					tenantName: ad.tenantName
+					tenantName: ad.tenantName,
+					id: "" + jID
 				},
 				headers: {
-					Authorization: "Bearer " + orchestrator._credentials
+					authorization: "Bearer " + ad.authToken
 				}
 			};
+			callBacks[jID] = {req: rReq};
+
 			if (req.body._callBackURL) {
-				callBacks[jID] = {req: rReq, callBackURL: req.body._callBackURL};
+				callBacks[jID].callBackURL = req.body._callBackURL;
 				res.type('json').status(202).send({jobId: jID});
 			} else {
-				callBacks[jID] = {req:rReq, res: res};
+				callBacks[jID].res = res;
 			}
 		})
 		.catch((err) => {
@@ -423,10 +426,9 @@ function getProcessHtml(req, res) {
 
 function processCallBacks() {
 	for (var jobId in callBacks) {
-		callBacks[jobId].req.params.id = jobId;
 		if (!callBacks[jobId].checking) {
 			callBacks[jobId].checking = true;
-			getJobStatus(callBacks[jobId].req, null, (response) => {
+			getJobStatus(callBacks[jobId].req, null, (jobId, response) => {
 				if (response.finished === true || response.EndTime) {
 					if (response.Result)
 						response.Result = cleanUpEntities(response.Result);
@@ -441,7 +443,6 @@ function processCallBacks() {
 						}
 
 						callBacks[jobId].res.status(s).send(response.Result?response.Result:response);
-
 					}
 					delete callBacks[jobId];
 				}
