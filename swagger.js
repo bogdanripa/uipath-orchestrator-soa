@@ -9,7 +9,7 @@ function _transformId(params) {
 	return params;
 }
 
-function _getInputParams(args) {
+function _getInputParams(args, cbAsGet) {
 	var params = [];
 	if (args && args.Input) {
 		var ip = args.Input;
@@ -32,7 +32,7 @@ function _getInputParams(args) {
 		params.push({
 			name: "_callBackURL",
 			type: DType.string,
-			place: DType.formData,
+			place: cbAsGet?DType.query:DType.formData,
 			description: "Leave empty for sync calls",
 			required: false
 		});
@@ -174,7 +174,7 @@ module.exports.getPaths = (ad, instance) => {
 
 		for (var verb in instance.entities[f]) {
 			var p = instance.entities[f][verb];
-			var iParams = _getInputParams(p.details.Arguments);
+			var iParams = _getInputParams(p.details.Arguments, true);
 			var oParams = _getOutputParams(p.details.Arguments);
 			switch(verb) {
 				case 'list':
