@@ -14,17 +14,19 @@ const port = 8081;
 var instances = {};
 var callBacks = {};
 
-function refreshInstanceTime(ad) {
-	if (instances[ad.authToken])
-		instances[ad.authToken].lastAccessed = Date.now();
-}
-
 function getAuthDetails(req) {
 	var authToken;
 	if (req.cookies && req.cookies.authToken)
 		authToken = req.cookies.authToken
-	else
-		authToken = req.headers.Authorization.replace(/^Bearer\s+/, '');
+	else {
+		if (req.headers && req.headers.Authorization)
+			authToken = req.headers.Authorization.replace(/^Bearer\s+/, '');
+		else
+			authToken = "";
+	}
+
+	if (authToken && instances[authToken])
+		instances[authToken].lastAccessed = Date.now();
 
 	return {
 		authToken: authToken,
@@ -34,6 +36,7 @@ function getAuthDetails(req) {
 }
 
 function getOrchestrator(ad) {
+	if (!ad.authToken) return {};
 	var orchestrator = Orchestrator2.getOrchestrator(ad.tenantName, ad.authToken);
 
 	if (!instances[ad.authToken]) {
@@ -60,7 +63,6 @@ function authenticate(req, res) {
 
 function getJobStatus(req, res, cb) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		var msg = {error: 'please retry'};
@@ -153,7 +155,6 @@ function loadProcesses(ad, orchestrator, f) {
 function refreshFolders(req, res) {
 	console.log("Refreshing folders");
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	delete instances[ad.authToken];
 	getOrchestrator(ad);
 	res.send({response: "Done"});
@@ -253,7 +254,6 @@ function renderProcces(ad, process, res) {
 
 function getFolders(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -270,7 +270,6 @@ function getFolders(req, res) {
 
 function getDeleteEntities(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -332,7 +331,6 @@ function getDeleteEntities(req, res) {
 
 function postPatchEntities(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -374,7 +372,6 @@ function postPatchEntities(req, res) {
 
 function getProcess(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -392,7 +389,6 @@ function getProcess(req, res) {
 
 function postProcess(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -476,7 +472,6 @@ var swagger = new Document({
 
 function swaggerCB(req, res, next) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	var orchestrator = getOrchestrator(ad);
 	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
@@ -497,7 +492,6 @@ function swaggerCB(req, res, next) {
 
 function getStatus(req, res) {
 	var ad = getAuthDetails(req);
-	refreshInstanceTime(ad);
 	if (instances[ad.authToken]) 
 		if (instances[ad.authToken].loaded)
 			res.send({status: "loaded"});
