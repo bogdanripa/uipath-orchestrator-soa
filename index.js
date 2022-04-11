@@ -432,16 +432,15 @@ function processCallBacks() {
 				if (response.finished === true || response.EndTime) {
 					if (response.Result)
 						response.Result = cleanUpEntities(response.Result);
+					if(response.State == 'Faulted') {
+						delete response.Result;
+					}
 					if (!callBacks[jobId].res) {
 						// async
 						request.post(callBacks[jobId].callBackURL, response.Result?response.Result:response);
 					} else {
 						//sync
-						var s = 200;
-						if(response.State == 'Faulted') {
-							s = 500;
-						}
-
+						var s = (response.State != 'Faulted')?200:500;
 						callBacks[jobId].res.status(s).send(response.Result?response.Result:response);
 					}
 					delete callBacks[jobId];
