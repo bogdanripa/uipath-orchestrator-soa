@@ -20,8 +20,9 @@ function getAuthDetails(req) {
 	if (req.cookies && req.cookies.authToken)
 		authToken = req.cookies.authToken
 	else {
-		if (req.headers && req.headers.Authorization)
-			authToken = req.headers.Authorization.replace(/^Bearer\s+/, '');
+		console.log(req.headers);
+		if (req.headers && req.headers.authorization)
+			authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
 		else
 			authToken = "";
 	}
