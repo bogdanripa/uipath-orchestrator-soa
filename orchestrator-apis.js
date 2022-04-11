@@ -157,3 +157,21 @@ module.exports.loadProcesses = (ad, orchestrator, fID, f) => {
 		});	
 	});
 }
+
+module.exports.loadQueues = (ad, orchestrator, fID, f) => {
+	return new Promise((resolve, reject) => {
+		var apiQuery = {};
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueProcessingRecords/UiPathODataSvc.RetrieveQueuesProcessingStatus?$top=10&$orderby=QueueDefinitionName%20asc';
+		orchestrator.switchOrganizationUnitId(fID);
+		console.log("GET " + url.replace(/\?.*/, '') + ' (' + fID + ')');
+
+		orchestrator.get(url, apiQuery, function (err, data) {
+		    if (err) {
+		    	reject(err)
+		        return;
+		    }
+		    var queues = [];
+		    resolve(queues);
+		});
+	});
+}

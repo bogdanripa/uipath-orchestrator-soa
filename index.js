@@ -143,10 +143,25 @@ function loadFolders(ad, orchestrator, fIDs) {
 
 function loadProcesses(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadProcesses(ad, orchestrator, instances[orchestrator._credentials].folders[f], f)
+		Orchestrator2.loadProcesses(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((processes) => {
 				for (var i=0;i<processes.length;i++)
 			    	instances[ad.authToken].processes.push(processes[i]);
+			    resolve(orchestrator);
+			})
+			.catch ((err) => {
+		        console.error('Error: ' + err);
+		        resolve(orchestrator);
+			});
+	});
+}
+
+function loadQueues(ad, orchestrator, f) {
+	return new Promise((resolve, reject) => {
+		Orchestrator2.loadQueues(ad, orchestrator, instances[ad.authToken].folders[f], f)
+			.then((queues) => {
+				for (var i=0;i<queues.length;i++)
+			    	instances[ad.authToken].queues.push(queues[i]);
 			    resolve(orchestrator);
 			})
 			.catch ((err) => {
@@ -190,13 +205,15 @@ function init(ad, orchestrator) {
 			console.log(`Loading processes (${ad.orgId}/${ad.tenantName})`);
 			var pList = [];
 			for (var f in instances[orchestrator._credentials].folders) {
-				pList.push(loadProcesses(ad, orchestrator, f, loadEntities));
+				pList.push(loadProcesses(ad, orchestrator, f));
+				pList.push(loadQueues(ad, orchestrator, f));
 			}
 
 			Promise.all(pList)
 				.then(() => {
 					loadEntities(ad)
-				})
+				});
+
 		})
 		.catch((err) => {
 			console.error(err);
@@ -437,7 +454,7 @@ function processCallBacks() {
 					}
 					if (!callBacks[jobId].res) {
 						// async
-						request.post(callBacks[jobId].callBackURL, response.Result?response.Result:response);
+						request.post(callBacks[jobId].callBackURL, {json: response.Result?response.Result:response});
 					} else {
 						//sync
 						var s = (response.State != 'Faulted')?200:500;
