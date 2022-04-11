@@ -422,7 +422,7 @@ function getProcessHtml(req, res) {
 }
 
 function processCallBacks() {
-	for (jobId in callBacks) {
+	for (var jobId in callBacks) {
 		callBacks[jobId].req.params.id = jobId;
 		if (!callBacks[jobId].checking) {
 			callBacks[jobId].checking = true;
