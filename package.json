@@ -11,6 +11,7 @@
   "dependencies": {
     "cookie-parser": "^1.4.6",
     "express": "^4.17.3",
+    "request": "^2.88.2",
     "swagger-generator-json": "^1.2.0",
     "swagger-ui-express": "^4.3.0",
     "uipath-orchestrator": "^1.1.3"
