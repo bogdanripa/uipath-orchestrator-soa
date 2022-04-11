@@ -457,7 +457,8 @@ function expireCache() {
 	for (t in instances) {
 		var instance = instances[t];
 		if (instance.lastAccessed) {
-			if(Date.now() - instance.lastAccessed > 1000*5*60)
+			// delete cache after 1 hour of inactivity
+			if(Date.now() - instance.lastAccessed > 1000*60*60)
 				delete instances[t];
 		}
 	}
