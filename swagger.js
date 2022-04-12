@@ -65,7 +65,7 @@ module.exports.getPaths = (ad, instance) => {
 		    path: '/' + ad.orgId + '/' + ad.tenantName  + '/folders'+ f,
 		    operation: [
 		        new Operation({
-		        	summary: "Gets the list of subfolders and processes in " + f,
+		        	summary: "Gets the list of subfolders, processes and queues in " + f,
 		            method: DType.get,
 		            parameters: [],
 		            responses: [
@@ -81,7 +81,11 @@ module.exports.getPaths = (ad, instance) => {
 		                    	],
 		                    	processes: [
 		                    		DType.string
+		                    	],
+		                    	queues: [
+		                    		DType.string
 		                    	]
+
 		                    }
 		                })
 		            ],
