@@ -14,6 +14,6 @@
     "request": "^2.88.2",
     "swagger-generator-json": "^1.2.0",
     "swagger-ui-express": "^4.3.0",
-    "uipath-orchestrator": "file:uipath-orchestrator"
+    "uipath-orchestrator": "^1.1.3"
   }
 }
