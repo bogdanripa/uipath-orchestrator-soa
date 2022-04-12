@@ -8,6 +8,7 @@
 			#folders {display: none}
 			#folders a {font-weight: bold;}
 			#processes {display: none}
+			#queues {display: none}
 		</style>
 	</head>
 	<body>
@@ -25,6 +26,14 @@
 			<h2>Processes:</h2>
 			<ul>
 			{{#each processes}} 
+				<li><a href="{{../fName}}/{{this}}.html">{{this}}</a></li>
+			{{/each}}
+			</ul>
+		</div>
+		<div id="queues">
+			<h2>Queues:</h2>
+			<ul>
+			{{#each queues}} 
 				<li><a href="{{../fName}}/{{this}}.html">{{this}}</a></li>
 			{{/each}}
 			</ul>

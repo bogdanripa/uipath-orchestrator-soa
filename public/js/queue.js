@@ -15,28 +15,11 @@ function loadData() {
 				return;
 			}
 			$('#loading').hide();
-			if (data.folders) {
-				var template = Handlebars.compile($('#folders').html());
+			if (data.queueName) {
+				var template = Handlebars.compile($('#queue').html());
 				data.fName = apiPath.replace(/.*\//, '');
-				data.parentName = apiPath.replace(/\/[^\/]*$/, '.html');
-				$('#folders').html(template(data));
-				$('#folders').show();
-			}
-			if (data.processes) {
-				if (data.processes.length > 0) {
-					var template = Handlebars.compile($('#processes').html());
-					data.fName = apiPath.replace("/folders/", "/processes/");
-					$('#processes').html(template(data));
-					$('#processes').show();
-				}
-			}
-			if (data.queues) {
-				if (data.queues.length > 0) {
-					var template = Handlebars.compile($('#queues').html());
-					data.fName = apiPath.replace("/folders/", "/queues/");
-					$('#queues').html(template(data));
-					$('#queues').show();
-				}
+				$('#queue').html(template(data));
+				$('#queue').show();
 			}
 		})
 		.fail((xhr, status, error) => {

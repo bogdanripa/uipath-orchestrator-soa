@@ -44,6 +44,7 @@ function getOrchestrator(ad) {
 		instances[ad.authToken] = {
 			folders: {},
 			processes: [],
+			queues: [],
 			entities: {}
 		};
 		init(ad, orchestrator);
@@ -74,13 +75,62 @@ function getJobStatus(req, res, cb) {
 		return;
 	}
 
-	ad.id = req.params.id.replace(/\D/, '');
+	ad.id = req.params.id.replace(/\D/g, '');
 	Orchestrator2.getJobDetails(orchestrator, ad)
 		.then((response) => {
 			if (res)
 				res.type('json').send(response);
 			else
 				cb(ad.id, response);
+		})
+		.catch((err) => {
+			if (res)
+				res.type('json').status(500).send({error: err});
+			else
+				cb(ad.id, {finished: true, error: err});
+		});
+}
+
+function getTransactionStatus(req, res) {
+	return getTransactionStatusCB(req, res);
+}
+
+function getTransactionStatusCB(req, res, fID, cb) {
+	var ad = getAuthDetails(req);
+	var orchestrator = getOrchestrator(ad);
+	if (!orchestrator._credentials || !instances[ad.authToken] || !instances[orchestrator._credentials].folders) {
+		var msg = {error: 'please retry'};
+		if (res)
+			res.type('json').status(503).send(msg);
+		else
+			cb(msg);
+		return;
+	}
+
+	if (!fID) {
+		var folder = '';
+		if (req.params && req.params[0])
+			folder = req.params[0];
+		ad.id = folder.replace(/^.*\//, '');
+		var fName = folder.replace(/\/[^\/]*$/, '');
+		fID = instances[ad.authToken].folders["/" + fName];
+	}
+
+	if (!ad.id)
+		ad.id = req.params.id.replace(/[\D]/g, '');
+
+	Orchestrator2.getTransactionStatus(orchestrator, ad, fID)
+		.then((response) => {
+			var rsp = {
+				"Status": response.Status,
+				"Output": response.Output,
+				"ProcessingExceptionType": response.ProcessingExceptionType,
+				"ProcessingException": response.ProcessingException
+			};
+			if (res)
+				res.type('json').send(rsp);
+			else
+				cb(ad.id, rsp);
 		})
 		.catch((err) => {
 			if (res)
@@ -107,6 +157,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 					tenantName: ad.tenantName,
 					id: "" + jID
 				},
+				type: "process",
 				headers: {
 					authorization: "Bearer " + ad.authToken
 				}
@@ -115,9 +166,38 @@ function startProcess(ad, orchestrator, process, req, res) {
 
 			if (req.body._callBackURL) {
 				callBacks[jID].callBackURL = req.body._callBackURL;
-				res.type('json').status(202).send({jobId: jID});
+				res.type('json').status(202).send({jobId: jID, pullUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/jobs/" + jID});
 			} else {
 				callBacks[jID].res = res;
+			}
+		})
+		.catch((err) => {
+		  	res.type('json').status(500).send({error: err});
+		});
+}
+
+function addQueueItem(ad, orchestrator, queue, req, res) {
+	Orchestrator2.addQueueItem(ad, orchestrator, instances[ad.authToken].folders[queue.folder], queue, req.body)
+		.then((transactionId) => {
+			var rReq = {
+				params: {
+					orgId: ad.orgId,
+					tenantName: ad.tenantName,
+					id: "" + transactionId
+				},
+				type: "queue",
+				headers: {
+					authorization: "Bearer " + ad.authToken
+				}
+			};
+			callBacks[transactionId] = {req: rReq};
+			callBacks[transactionId].fID = instances[ad.authToken].folders[queue.folder];
+
+			if (req.body._callBackURL) {
+				callBacks[transactionId].callBackURL = req.body._callBackURL;
+				res.type('json').status(202).send({transactionId: transactionId, pullUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/transactions" + queue.folder + "/" + transactionId});
+			} else {
+				callBacks[transactionId].res = res;
 			}
 		})
 		.catch((err) => {
@@ -160,8 +240,22 @@ function loadQueues(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
 		Orchestrator2.loadQueues(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((queues) => {
-				for (var i=0;i<queues.length;i++)
+				for (var i=0;i<queues.length;i++) {
 			    	instances[ad.authToken].queues.push(queues[i]);
+			    	Orchestrator2.loadQueueDetails(ad, orchestrator, instances[ad.authToken].folders[f], f, queues[i].id)
+			    		.then((queue) => {
+			    			for (var i=0;i<instances[ad.authToken].queues.length;i++) {
+			    				if (instances[ad.authToken].queues[i].id == queue.id) {
+			    					instances[ad.authToken].queues[i].inSchema = queue.inSchema;
+			    					instances[ad.authToken].queues[i].outSchema = queue.outSchema;
+			    					break;
+			    				}
+			    			}
+			    		})
+			    		.catch((err) => {
+					        console.error('Error: ' + err);
+			    		});
+				}
 			    resolve(orchestrator);
 			})
 			.catch ((err) => {
@@ -223,7 +317,7 @@ function init(ad, orchestrator) {
 function renderFolder(ad, root, res) {
 	root = root.replace(/^\//, '');
 	root = root.replace(/\/$/, '');
-	var out = {folders: [], processes: []};
+	var out = {folders: [], processes: [], queues: []};
 	// subfolders
 	for (var f in instances[ad.authToken].folders) {
 		if (root == '' || f.indexOf(root) == 1) {
@@ -243,6 +337,16 @@ function renderFolder(ad, root, res) {
 		f = f.replace(/\/$/, '');
 		if (f == root) {
 			out.processes.push(p.name);
+		}
+	}
+	// queues
+	for (var i=0;i<instances[ad.authToken].queues.length;i++) {
+		var q = instances[ad.authToken].queues[i];
+		var f = q.folder;
+		f = f.replace(/^\//, '');
+		f = f.replace(/\/$/, '');
+		if (f == root) {
+			out.queues.push(q.name);
 		}
 	}
 
@@ -265,6 +369,25 @@ function renderProcces(ad, process, res) {
 				input: p.details.Arguments.Input,
 				output: p.details.Arguments.Output
 			}
+
+			res.type('json').send(out);
+			return true;
+		}
+	}
+	return false;
+}
+
+function renderQueue(ad, process, res) {
+	var qName = process.replace(/^.*\//, '');
+	var fName = process.replace(/\/[^\/]*$/, '');
+	for (var i=0;i<instances[ad.authToken].queues.length;i++) {
+		var q = instances[ad.authToken].queues[i];
+		if (q.folder == fName && q.name == qName) {
+			var out = {};
+			out.id = q.id;
+			out.queueName = q.name;
+			out.inSchema = q.inSchema;
+			out.outSchema = q.outSchema;
 
 			res.type('json').send(out);
 			return true;
@@ -433,6 +556,48 @@ function postProcess(req, res) {
 	return false;
 }
 
+function getQueue(req, res) {
+	var ad = getAuthDetails(req);
+	var orchestrator = getOrchestrator(ad);
+	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+		res.type('json').status(503).send({error: 'please retry'});
+		return;
+	}
+
+	var folder = '';
+	if (req.params && req.params[0])
+		folder = req.params[0];
+
+	if (!renderQueue(ad, folder, res)) {
+		res.status(404).send({error: "queue not found"});
+	}
+}
+
+function postQueue(req, res) {
+	var ad = getAuthDetails(req);
+	var orchestrator = getOrchestrator(ad);
+	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+		res.type('json').status(503).send({error: 'please retry'});
+		return;
+	}
+	var folder = '';
+	if (req.params && req.params[0])
+		folder = req.params[0];
+
+	var qName = folder.replace(/^.*\//, '');
+	var fName = '/' + folder.replace(/\/[^\/]*$/, '');
+
+	for (var i=0;i<instances[ad.authToken].queues.length;i++) {
+		var q = instances[ad.authToken].queues[i];
+		if (q.folder == fName && q.name == qName) {
+			addQueueItem(ad, orchestrator, q, req, res);
+			return true;
+		}
+	}
+	res.status(404).send({error: "process not found"});
+	return false;
+}
+
 function getFoldersHtml(req, res) {
 	res.sendFile(path.join(__dirname, 'public/folder.html'));
 }
@@ -441,30 +606,56 @@ function getProcessHtml(req, res) {
 	res.sendFile(path.join(__dirname, 'public/process.html'));
 }
 
+function getQueueHtml(req, res) {
+	res.sendFile(path.join(__dirname, 'public/queue.html'));
+}
+
 function processCallBacks() {
-	for (var jobId in callBacks) {
-		if (!callBacks[jobId].checking) {
-			callBacks[jobId].checking = true;
-			getJobStatus(callBacks[jobId].req, null, (jobId, response) => {
-				if (response.finished === true || response.EndTime) {
-					if (response.Result)
-						response.Result = cleanUpEntities(response.Result);
-					if(response.State == 'Faulted') {
-						delete response.Result;
+	for (var id in callBacks) {
+		if (!callBacks[id].checking) {
+			callBacks[id].checking = true;
+			if (callBacks[id].req.type == "process")
+				getJobStatus(callBacks[id].req, null, (id, response) => {
+					if (response.finished === true || response.EndTime) {
+						if (response.Result)
+							response.Result = cleanUpEntities(response.Result);
+						if(response.State == 'Faulted') {
+							delete response.Result;
+						}
+						if (!callBacks[id].res) {
+							// async
+							request.post(callBacks[id].callBackURL, {json: response.Result?response.Result:response}, (err, res, data) => {
+								if (err) console.error("Error callback'ing: " + err);
+							});
+						} else {
+							//sync
+							var s = (response.State != 'Faulted')?200:500;
+							callBacks[id].res.status(s).send(response.Result?response.Result:response);
+						}
+						delete callBacks[id];
 					}
-					if (!callBacks[jobId].res) {
+					else
+						callBacks[id].checking = false;
+				});
+			else {
+				getTransactionStatusCB(callBacks[id].req, null, callBacks[id].fID, (id, response) => {
+					if(response.Status == "New" || response.Status == "InProgress") {
+						callBacks[id].checking = false;
+						return;
+					}
+					if (!callBacks[id].res) {
 						// async
-						request.post(callBacks[jobId].callBackURL, {json: response.Result?response.Result:response});
+						request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
+								if (err) console.error("Error callback'ing: " + err);
+							});
 					} else {
 						//sync
-						var s = (response.State != 'Faulted')?200:500;
-						callBacks[jobId].res.status(s).send(response.Result?response.Result:response);
+						var s = response.finished?500:200;
+						callBacks[id].res.status(s).send(response);
 					}
-					delete callBacks[jobId];
-				}
-				else
-					callBacks[jobId].checking = false;
-			});
+					delete callBacks[id];
+				});
+			}
 		}
 	}
 }
@@ -526,6 +717,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(cookieParser());
+
 app.get('/:orgId/:tenantName/docs', swaggerCB)
 app.use('/:orgId/:tenantName/docs', swaggerUi.serve, swaggerUi.setup({swagger}));
 app.get ('/:orgId/:tenantName/refresh', refreshFolders);
@@ -534,13 +726,17 @@ app.get ('/:orgId/:tenantName/folders*', getFolders);
 app.get ('/:orgId/:tenantName/processes*.html', getProcessHtml);
 app.get ('/:orgId/:tenantName/processes*', getProcess);
 app.post('/:orgId/:tenantName/processes/*', postProcess);
+app.get ('/:orgId/:tenantName/queues*.html', getQueueHtml);
+app.get ('/:orgId/:tenantName/queues*', getQueue);
+app.post('/:orgId/:tenantName/queues/*', postQueue);
 app.get('/:orgId/:tenantName/entities/*', getDeleteEntities);
 app.delete('/:orgId/:tenantName/entities/*', getDeleteEntities);
 app.post('/:orgId/:tenantName/entities/*', postPatchEntities);
 app.patch('/:orgId/:tenantName/entities/*', postPatchEntities);
 app.get('/:orgId/:tenantName/jobs/:id', getJobStatus);
-app.get('/:orgId/:tenantName/status', getStatus)
-app.post('/:orgId/:tenantName/auth', authenticate)
+app.get('/:orgId/:tenantName/transactions/*', getTransactionStatus);
+app.get('/:orgId/:tenantName/status', getStatus);
+app.post('/:orgId/:tenantName/auth', authenticate);
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`)

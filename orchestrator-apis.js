@@ -50,6 +50,22 @@ module.exports.getJobDetails = (orchestrator, ad) => {
 	});
 };
 
+module.exports.getTransactionStatus = (orchestrator, ad, fID) => {
+	return new Promise((resolve, reject) => {
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueItems('+ad.id+')';
+		console.log("GET " + url);
+		orchestrator.switchOrganizationUnitId(fID);
+		orchestrator.get(url, {}, function (err, data) {
+			if (err) {
+				console.error('Error: ' + err);
+				reject(err);
+				return;
+			}
+			resolve(data);
+		});
+	});
+};
+
 module.exports.startProcess = (ad, orchestrator, fID, process, ia) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {
@@ -75,6 +91,48 @@ module.exports.startProcess = (ad, orchestrator, fID, process, ia) => {
 		  }
 		  console.log("Job start requested.");
 		  resolve(data.value[0].Id);
+		});
+	});
+}
+
+module.exports.addQueueItem = (ad, orchestrator, fID, queue, qi) => {
+	return new Promise((resolve, reject) => {
+		if (qi.content) {
+			try {
+				qi.content = JSON.parse(qi.content);
+				for (var key in qi.content) {
+					if (typeof qi.content[key] == 'object' || typeof qi.content[key] == 'array')
+						qi.content[key] = JSON.stringify(qi.content[key]);
+				}
+			} catch(e) {
+				reject("Malformed queue item content: " + e);
+			}
+		} else 
+			qi.content = {};
+		var apiQuery = {
+		  "itemData": {
+		    "Name": queue.name,
+		    "Priority": qi.priority,
+		    "SpecificContent": qi.content,
+		    "Reference": qi.reference
+		    /*"DeferDate": "2022-04-11T15:25:19.260Z",
+		    "DueDate": "2022-04-11T15:25:19.260Z",
+		    "RiskSlaDate": "2022-04-11T15:25:19.260Z",
+		    "Progress": "string"*/
+		  }
+		}
+
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/Queues/UiPathODataSvc.AddQueueItem';
+		console.log("POST " + url + ' (' + queue.name + ' in ' + fID + ')');
+		orchestrator.switchOrganizationUnitId(fID);
+		orchestrator.post(url, apiQuery, function (err, data) {
+		  if (err) {
+		    console.error('Error: ' + err);
+		    reject(err);
+		    return;
+		  }
+		  console.log("Job start requested.");
+		  resolve(data.Id);
 		});
 	});
 }
@@ -161,7 +219,7 @@ module.exports.loadProcesses = (ad, orchestrator, fID, f) => {
 module.exports.loadQueues = (ad, orchestrator, fID, f) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {};
-		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueProcessingRecords/UiPathODataSvc.RetrieveQueuesProcessingStatus?$top=10&$orderby=QueueDefinitionName%20asc';
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueProcessingRecords/UiPathODataSvc.RetrieveQueuesProcessingStatus';
 		orchestrator.switchOrganizationUnitId(fID);
 		console.log("GET " + url.replace(/\?.*/, '') + ' (' + fID + ')');
 
@@ -171,7 +229,45 @@ module.exports.loadQueues = (ad, orchestrator, fID, f) => {
 		        return;
 		    }
 		    var queues = [];
+		    for (var i=0;i<data.value.length;i++) {
+				queues.push({
+					folder: f,
+					id: data.value[i].QueueDefinitionId,
+					name: data.value[i].QueueDefinitionName.replace(/[^\d\w_\-]/g, '')
+				});
+		    }
 		    resolve(queues);
+		});
+	});
+}
+
+module.exports.loadQueueDetails = (ad, orchestrator, fID, f, qID) => {
+	return new Promise((resolve, reject) => {
+		var apiQuery = {};
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueDefinitions('+qID+')';
+		orchestrator.switchOrganizationUnitId(fID);
+		console.log("GET " + url.replace(/\?.*/, '') + ' (' + fID + ')');
+
+		orchestrator.get(url, apiQuery, function (err, data) {
+		    if (err) {
+		    	reject(err)
+		        return;
+		    }
+		    var queue = {
+		    	id: data.Id,
+		    	fID: fID
+		    };
+
+		    try {
+			    if (data.SpecificDataJsonSchema)
+			    	queue.inSchema = JSON.parse(data.SpecificDataJsonSchema);
+				if (data.OutputDataJsonSchema)
+			    	queue.outSchema= JSON.parse(data.OutputDataJsonSchema);
+			} catch(e) {
+				reject(e);
+			}
+
+		    resolve(queue);
 		});
 	});
 }

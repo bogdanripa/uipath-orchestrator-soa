@@ -1,0 +1,31 @@
+<html>
+	<head>
+		<title></title>
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+		<script src="https://cdn.jsdelivr.net/npm/handlebars@latest/dist/handlebars.js"></script>
+		<script src="/js/queue.js"></script>
+		<style>
+			#queue {display: none}
+		</style>
+	</head>
+	<body>
+		<div id="loading">Loading...</div>
+		<div id="queue">
+			<h1>{{queueName}}</h1>
+			<form method="post" action="{{queueName}}">
+				<label>Reference:</label>
+				<div><input type="text" name="reference"/></div>
+				<label>Priority:</label>
+				<div><select name="priority"><option>Low</option><option selected="selected">Normal</option><option>High</option></select></div>
+				<label>Queue item JSON:</label>
+				<div><textarea name="content" cols="100" rows="20"></textarea></div>
+				<hr/>
+				<label>Callback URL:</label><div><input type="text" name="_callBackURL" placeholder="https://"/></div>
+				<hr/>
+				<input type="submit"/>
+			</form>
+		</div>
+		<hr>
+		<a id="swagger" href="{{swaggerUrl}}">Swagger</a>
+	</body>
+</html>

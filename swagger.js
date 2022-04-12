@@ -91,6 +91,7 @@ module.exports.getPaths = (ad, instance) => {
 		}));
 	}
 
+	// processes
 	for (var i=0;i<instance.processes.length;i++) {
 		var p = instance.processes[i];
 		var iParams = _getInputParams(p.details.Arguments);
@@ -113,7 +114,7 @@ module.exports.getPaths = (ad, instance) => {
 		                new Response({
 		                	code: 202,
 		                	description: "Used for async calls",
-		                    schema: {jobId: DType.number}
+		                    schema: {jobId: DType.number, pullUrl: DType.string}
 		                }),
 		                new Response({
 		                	code: 200,
@@ -192,7 +193,7 @@ module.exports.getPaths = (ad, instance) => {
 			                new Response({
 			                	code: 202,
 			                	description: "Used for async calls",
-			                    schema: {jobId: DType.number}
+			                    schema: {jobId: DType.number, pullUrl: DType.string}
 			                }),
 			                new Response({
 			                	code: 200,
@@ -217,7 +218,7 @@ module.exports.getPaths = (ad, instance) => {
 			                new Response({
 			                	code: 202,
 			                	description: "Used for async calls",
-			                    schema: {jobId: DType.number}
+			                    schema: {jobId: DType.number, pullUrl: DType.string}
 			                }),
 			                new Response({
 			                	code: 200,
@@ -242,7 +243,7 @@ module.exports.getPaths = (ad, instance) => {
 			                new Response({
 			                	code: 202,
 			                	description: "Used for async calls",
-			                    schema: {jobId: DType.number}
+			                    schema: {jobId: DType.number, pullUrl: DType.string}
 			                }),
 			                new Response({
 			                	code: 200,
@@ -267,7 +268,7 @@ module.exports.getPaths = (ad, instance) => {
 			                new Response({
 			                	code: 202,
 			                	description: "Used for async calls",
-			                    schema: {jobId: DType.number}
+			                    schema: {jobId: DType.number, pullUrl: DType.string}
 			                }),
 			                new Response({
 			                	code: 200,
@@ -292,7 +293,7 @@ module.exports.getPaths = (ad, instance) => {
 			                new Response({
 			                	code: 202,
 			                	description: "Used for async calls",
-			                    schema: {jobId: DType.number}
+			                    schema: {jobId: DType.number, pullUrl: DType.string}
 			                }),
 			                new Response({
 			                	code: 200,
@@ -319,13 +320,101 @@ module.exports.getPaths = (ad, instance) => {
 		}
 	}
 
+	// queues
+	var qfs = {};
+	for (var i=0;i<instance.queues.length;i++) {
+		var q = instance.queues[i];
+		qfs[q.folder] = 1;
+		paths.push(new API({
+		    path: '/' + ad.orgId + '/' + ad.tenantName  + '/queues'+ q.folder + '/' + q.name,
+		    operation: [
+		        new Operation({
+		        	summary: "Gets " + q.name + " queue deffinition",
+		            method: DType.get,
+		            parameters: [],
+				    tags: 'Queue operations',
+		            responses: [
+		                new Response({
+		                	code: 503,
+							description: "Folder structure is loading, please retry the call",
+		                	schema: {error: DType.string}
+		                }),
+		                new Response({
+		                	code: 200,
+		                    schema: {
+		                    	id: DType.string,
+		                    	name: DType.string,
+		                    	inSchema: DType.string,
+		                    	outSchema: DType.string
+		                    }
+		                })
+		            ]
+		        }),
+		        new Operation({
+		        	summary: "Adds a queue item to the " + q.name + " queue",
+		            method: DType.post,
+				    tags: 'Queue operations',
+		            parameters: [
+		            	{
+            				name: "reference",
+							type: DType.string,
+							place: DType.formData,
+							description: ""
+						},
+						{
+            				name: "priority",
+							type: DType.string,
+							place: DType.formData,
+							description: "High, Normal or Low"
+						},
+						{
+            				name: "content",
+							type: DType.string,
+							place: DType.formData,
+							description: "1-level JSON object"
+						},
+						{
+            				name: "_callBackURL",
+							type: DType.string,
+							place: DType.formData,
+							required: false,
+							description: "Leave empty for sync calls"
+						}
+		            ],
+		            responses: [
+		                new Response({
+		                	code: 503,
+							description: "Folder structure is loading, please retry the call",
+		                	schema: {error: DType.string}
+		                }),
+		                new Response({
+		                	code: 202,
+		                	description: "Used for async calls",
+		                    schema: {transactionId: DType.number, pullUrl: DType.string}
+		                }),
+		                new Response({
+		                	code: 200,
+		                	description: "Used for sync calls",
+		                    schema: {
+		                    	"Status": DType.string,
+		                    	"Output": DType.json,
+		                    	"ProcessingExceptionType": DType.string,
+		                    	"ProcessingException": DType.string
+		                    }
+		                })
+		            ]
+		        })
+		    ]
+		}));
+	}
+
 	paths.push(new API({
 	    path: '/' + ad.orgId + '/' + ad.tenantName  + '/jobs/{id}',
 	    operation: [
 	        new Operation({
 	        	summary: "Queries the status of a job " + f,
 	            method: DType.get,
-			    tags: 'Job operations',
+			    tags: 'Job and Transactions operations',
 	            parameters: [{
 	            	name: "id",
 	            	place: DType.path
@@ -350,5 +439,38 @@ module.exports.getPaths = (ad, instance) => {
 	        })
 	    ]
 	}));
+
+	for (var qf in qfs) {
+		paths.push(new API({
+		    path: '/' + ad.orgId + '/' + ad.tenantName  + '/transactions'+qf+'/{id}',
+		    operation: [
+		        new Operation({
+		        	summary: "Queries the status of a transaction item in " + qf,
+		            method: DType.get,
+				    tags: 'Job and Transactions operations',
+		            parameters: [{
+		            	name: "id",
+		            	place: DType.path
+		            }],
+		            responses: [
+		                new Response({
+		                	code: 503,
+		                	description: "Folder structure is loading, please retry the call",
+		                	schema: {error: DType.string}
+		                }),
+			            new Response({
+		                    schema: {
+		                    	"Status": DType.string,
+		                    	"Output": DType.json,
+		                    	"ProcessingExceptionType": DType.string,
+		                    	"ProcessingException": DType.string
+		                   	}
+		                })
+		            ]
+		        })
+		    ]
+		}));
+	}
+
 	return paths;
 }
