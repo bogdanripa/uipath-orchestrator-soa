@@ -221,7 +221,7 @@ module.exports.loadProcesses = (ad, orchestrator, fID, f) => {
 module.exports.loadQueues = (ad, orchestrator, fID, f) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {};
-		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueProcessingRecords/UiPathODataSvc.RetrieveQueuesProcessingStatus';
+		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueDefinitions';
 		orchestrator.switchOrganizationUnitId(fID);
 		console.log("GET " + url.replace(/\?.*/, '') + ' (' + fID + ')');
 
@@ -234,8 +234,8 @@ module.exports.loadQueues = (ad, orchestrator, fID, f) => {
 		    for (var i=0;i<data.value.length;i++) {
 				queues.push({
 					folder: f,
-					id: data.value[i].QueueDefinitionId,
-					name: data.value[i].QueueDefinitionName.replace(/[^\d\w_\-]/g, '')
+					id: data.value[i].Id,
+					name: data.value[i].Name.replace(/[^\d\w_\-]/g, '')
 				});
 		    }
 		    resolve(queues);

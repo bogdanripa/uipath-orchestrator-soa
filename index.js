@@ -225,8 +225,9 @@ function loadProcesses(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
 		Orchestrator2.loadProcesses(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((processes) => {
-				for (var i=0;i<processes.length;i++)
+				for (var i=0;i<processes.length;i++) {
 			    	instances[ad.authToken].processes.push(processes[i]);
+				}
 			    resolve(orchestrator);
 			})
 			.catch ((err) => {
