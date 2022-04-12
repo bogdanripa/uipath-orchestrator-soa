@@ -1,12 +1,14 @@
 const Orchestrator = require('uipath-orchestrator');
 
-module.exports.authenticate = (tenantName, clientId, userKey) => {
+module.exports.authenticate = (orgId, tenantName, clientId, userKey) => {
 	return new Promise((resolve, reject) => {
-		var orchestrator = new Orchestrator({
-			tenancyName: tenantName,
+		var oJSON = {
+			serviceInstanceLogicalName: tenantName,
+			path: orgId + "/" + tenantName,
 			clientId: clientId,
 			refreshToken: userKey
-		});
+		};
+		var orchestrator = new Orchestrator(oJSON);
 
 		orchestrator._login((err) => {
 			if (err) {

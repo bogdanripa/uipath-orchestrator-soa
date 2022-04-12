@@ -54,7 +54,7 @@ function getOrchestrator(ad) {
 }
 
 function authenticate(req, res) {
-	Orchestrator2.authenticate(req.body.tenantName, req.body.clientId, req.body.userKey)
+	Orchestrator2.authenticate(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey)
 		.then((authToken) => {
 			res.type('json').send({authToken: authToken});
 		})
