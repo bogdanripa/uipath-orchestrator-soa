@@ -1,5 +1,5 @@
-# UiPath processes in a SOA
-Exposes Orchestrator processes as REST APIs, including CRUD when certain criteria are met
+# Exposing UiPath Processes and Queues in a SOA
+Exposes Orchestrator processes and queues as REST APIs, including CRUD when certain criteria are met
 
 ## Running the server
 node index.js
@@ -14,9 +14,11 @@ Alternatively you can call the "http://localhost:8081/auth" API endpoint just li
 ## How to use
 Once authenticated, go to http://localhost:8081/ORGID/TENANTNAME/docs/ for the auto-generated swagger documenation.
 
-Go to http://localhost:8081/ORGID/TENANTNAME/folders.html to browse through your folders and processes in your browser.
+Go to http://localhost:8081/ORGID/TENANTNAME/folders.html to browse through your folders, queues and processes in your browser.
 
-When viewing a process, you will be able to start it right from your browser. 
+When viewing a process you will be able to start it right from your browser. 
+
+When viewing a queue you will be able to add queue items right from your browser. 
 
 !Important!
 Leaving the CallBack URL empty will result in a sync call. Otherwise the call will be async and you'll be called back on that URL when the process finishes execution.
@@ -43,7 +45,7 @@ Returns a list of root folders
 
 `GET http://localhost:8081/ORGID/TENANTNAME/folders/FOLDERA/`
 
-Returns a list of sub-folders for "FOLDERA", together with a list of processes available in that folder
+Returns a list of sub-folders for "FOLDERA", together with a list of processes and queues available in that folder
 
 `GET http://localhost:8081/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME`
 
@@ -55,11 +57,27 @@ Starts PROCESSNAME and waits for the response
 
 `POST http://localhost:8081/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME` - with a "\_callBackURL" POST parameter
 
-Starts PROCESSNAME and returns the Job ID. the callback url is called once the job finishes.
+Starts PROCESSNAME and returns the Job ID. The callback url is called once the job finishes.
 
 `GET http://localhost:8081/ORGID/TENANTNAME/jobs/1234`
 
 Returns the status for the job ID 1234. Use this API fol polling for job status.
+
+`GET http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
+
+Returns details for QUEUENAME that exists in FOLDERA
+
+`POST http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
+
+Adds a queue item to QUEUENAME that is defined in FOLDERA and waits for it to be transactioned
+
+`POST http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME` - with a "\_callBackURL" POST parameter
+
+Adds a queue item to QUEUENAME that is defined in FOLDERA and returns the Transaction ID. The callback url is called once the queue item is transactioned.
+
+`GET http://localhost:8081/ORGID/TENANTNAME/transactions/FOLDERA/1234`
+
+Returns the status for the transaction ID 1234. Use this API fol polling for job status.
 
 ## Creating CRUD endpoints
 Each folder can be transformed in a CRUD endpoint assuming one of the following conditions:
