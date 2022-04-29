@@ -54,7 +54,7 @@ function getOrchestrator(ad) {
 }
 
 function authenticate(req, res) {
-	Orchestrator2.authenticate(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey)
+	Orchestrator2.authenticate(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
 		.then((authToken) => {
 			res.type('json').send({authToken: authToken});
 		})
@@ -66,7 +66,7 @@ function authenticate(req, res) {
 function getJobStatus(req, res, cb) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		var msg = {error: 'please retry'};
 		if (res)
 			res.type('json').status(503).send(msg);
@@ -98,7 +98,7 @@ function getTransactionStatus(req, res) {
 function getTransactionStatusCB(req, res, fID, cb) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[ad.authToken] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		var msg = {error: 'please retry'};
 		if (res)
 			res.type('json').status(503).send(msg);
@@ -149,7 +149,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 		}
 	}
 
-	Orchestrator2.startProcess(ad, orchestrator, instances[orchestrator._credentials].folders[process.folder], process, ia)
+	Orchestrator2.startProcess(ad, orchestrator, instances[ad.authToken].folders[process.folder], process, ia)
 		.then((jID) => {
 			var rReq = {
 				params: {
@@ -299,7 +299,7 @@ function init(ad, orchestrator) {
 		.then(() => {
 			console.log(`Loading processes (${ad.orgId}/${ad.tenantName})`);
 			var pList = [];
-			for (var f in instances[orchestrator._credentials].folders) {
+			for (var f in instances[ad.authToken].folders) {
 				pList.push(loadProcesses(ad, orchestrator, f));
 				pList.push(loadQueues(ad, orchestrator, f));
 			}
@@ -400,7 +400,7 @@ function renderQueue(ad, process, res) {
 function getFolders(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -416,7 +416,7 @@ function getFolders(req, res) {
 function getDeleteEntities(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -426,9 +426,9 @@ function getDeleteEntities(req, res) {
 		folder = req.params[0];
 	folder = folder.replace(/\/+$/, '');
 	if (req.method == "GET")
-		for (e in instances[orchestrator._credentials].entities) {
+		for (e in instances[ad.authToken].entities) {
 			if (e == '/' + folder) {
-				if (instances[orchestrator._credentials].entities[e].list) {
+				if (instances[ad.authToken].entities[e].list) {
 					// list
 					var oReq = {
 						params: req.params,
@@ -477,7 +477,7 @@ function getDeleteEntities(req, res) {
 function postPatchEntities(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -518,7 +518,7 @@ function postPatchEntities(req, res) {
 function getProcess(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -535,7 +535,7 @@ function getProcess(req, res) {
 function postProcess(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -560,7 +560,7 @@ function postProcess(req, res) {
 function getQueue(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -577,7 +577,7 @@ function getQueue(req, res) {
 function postQueue(req, res) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}
@@ -684,7 +684,7 @@ var swagger = new Document({
 function swaggerCB(req, res, next) {
 	var ad = getAuthDetails(req);
 	var orchestrator = getOrchestrator(ad);
-	if (!orchestrator._credentials || !instances[orchestrator._credentials] || !instances[orchestrator._credentials].folders) {
+	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
 		res.type('json').status(503).send({error: 'please retry'});
 		return;
 	}

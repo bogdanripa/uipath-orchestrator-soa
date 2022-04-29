@@ -20,11 +20,13 @@
 			}
 
 			$(() =>{
+				$("select").val(localStorage.environment);
 				$("input[name='userKey']").val(localStorage.userKey);
 				$("input[name='orgId']").val(localStorage.orgId);
 				$("input[name='tenantName']").val(localStorage.tenantName);
 				$("input[name='clientId']").val(localStorage.clientId);
 				$("input[type='button']").click(() => {
+					localStorage.environment = $("select").val();
 					localStorage.userKey = $("input[name='userKey']").val();
 					localStorage.orgId = $("input[name='orgId']").val();
 					localStorage.tenantName = $("input[name='tenantName']").val();
@@ -43,7 +45,6 @@
 						    $("#loading").hide();
 							alert(error);
 						});
-
 				});
 			});
 		</script>
@@ -58,6 +59,8 @@
 	</head>
 	<body>
 		<form>
+			<label>Environment:</label>
+			<div><select name="environment"><option value="production">Production</option><option value="staging">Staging</option></select></div>
 			<label>User Key:</label>
 			<div><input type="text" name="userKey"/></div>
 			<label>Organization ID:</label>

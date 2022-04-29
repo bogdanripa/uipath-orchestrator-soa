@@ -1,6 +1,6 @@
 const Orchestrator = require('uipath-orchestrator');
 
-module.exports.authenticate = (orgId, tenantName, clientId, userKey) => {
+module.exports.authenticate = (orgId, tenantName, clientId, userKey, environment) => {
 	return new Promise((resolve, reject) => {
 		var oJSON = {
 			serviceInstanceLogicalName: tenantName,
@@ -8,6 +8,12 @@ module.exports.authenticate = (orgId, tenantName, clientId, userKey) => {
 			clientId: clientId,
 			refreshToken: userKey
 		};
+
+		if(environment == "staging") {
+			oJSON.hostname = 'staging.uipath.com';
+			oJSON.authHostname = 'id-preprod.uipath.com';
+		}
+
 		var orchestrator = new Orchestrator(oJSON);
 
 		orchestrator._login((err) => {
@@ -15,16 +21,24 @@ module.exports.authenticate = (orgId, tenantName, clientId, userKey) => {
 				reject(err);
 				return;
 			}
-			resolve(orchestrator._credentials);
+			resolve(((environment == "staging")?"1":"0") + orchestrator._credentials);
 		});
 	});
 };
 
 module.exports.getOrchestrator = (tenantName, authToken) => {
-	var orchestrator = new Orchestrator({
+
+	var oJSON = {
 		tenancyName: tenantName,
-		accessToken: authToken
-	});
+		accessToken: authToken.substring(1)
+	};
+
+	if (authToken[0] == '1') {
+		oJSON.hostname = 'staging.uipath.com';
+		oJSON.authHostname = 'id-preprod.uipath.com';
+	}
+
+	var orchestrator = new Orchestrator(oJSON);
 	orchestrator._getAccessToken();
 	return orchestrator;
 };
