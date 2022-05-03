@@ -14,130 +14,216 @@ const port = 8081;
 
 var instances = {};
 var callBacks = {};
+const presets = require("./presets.json");
 
-function getAuthDetails(req) {
-	var authToken;
-	if (req.authToken)
-		authToken = req.authToken;
-	else if (req.cookies && req.cookies.authToken)
-		authToken = req.cookies.authToken
-	else if (req.headers && req.headers.authorization)
-		authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
-	else
-		authToken = "";
-
-	if (authToken && instances[authToken])
-		instances[authToken].lastAccessed = Date.now();
-
-	return {
-		authToken: authToken,
-		orgId: req.params.orgId,
-		tenantName: req.params.tenantName
-	}	
-}
-
-function getOrchestrator(ad) {
-	if (!ad.authToken) return {};
-	var orchestrator = Orchestrator2.getOrchestrator(ad.tenantName, ad.authToken);
-
-	if (!instances[ad.authToken]) {
-		instances[ad.authToken] = {
-			folders: {},
-			processes: [],
-			queues: [],
-			entities: {}
-		};
-		init(ad, orchestrator);
+function sendError(res, err) {
+	var status = 500, msg = "Internal error";
+	if (err.statusCode) {
+		status = err.statusCode;
+		msg = "";
 	}
-
-	return orchestrator;
+	res.status(status).send(msg);
 }
+
+function getAuthDetailsP(req) {
+	return new Promise((resolve, reject) => {
+		var authToken;
+		if (req.authToken)
+			authToken = req.authToken;
+		else if (req.cookies && req.cookies.authToken)
+			authToken = req.cookies.authToken
+		else if (req.headers && req.headers.authorization)
+			authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
+		else
+			authToken = "";
+
+		if (!authToken) {
+			authenticateP(req)
+				.then((authToken) => {
+					if (authToken && instances[authToken])
+						instances[authToken].lastAccessed = Date.now();
+					var ad = {
+						authToken: authToken,
+						orgId: req.params.orgId,
+						tenantName: req.params.tenantName
+					};
+
+					getOrchestratorP(ad)
+						.then((orchestrator) => {
+							resolve([ad, orchestrator]);
+						})
+						.catch((err) => {
+							reject(err);
+						});
+				})
+				.catch((err) => {
+					reject(err);
+				})
+			return;
+		}
+
+		if (authToken && instances[authToken])
+			instances[authToken].lastAccessed = Date.now();
+
+		var ad = {
+			authToken: authToken,
+			orgId: req.params.orgId,
+			tenantName: req.params.tenantName
+		};
+
+		getOrchestratorP(ad)
+			.then((orchestrator) => {
+				resolve([ad, orchestrator]);
+			})
+			.catch((err) => {
+				reject(err);
+			});
+	});
+}
+
+function getOrchestratorP(ad) {
+	return new Promise((resolve, reject) => {
+		if (!ad.authToken) {
+			reject();
+			return;
+		}
+		var orchestrator = Orchestrator2.getOrchestrator(ad.tenantName, ad.authToken);
+
+		if (!instances[ad.authToken]) {
+			instances[ad.authToken] = {
+				folders: {},
+				processes: [],
+				queues: [],
+				entities: {}
+			};
+			initP(ad, orchestrator)
+				.then(() => {
+					console.log("Load complete (" + ad.orgId + "/" + ad.tenantName + ")");
+					resolve(orchestrator);
+				})
+				.catch((err) => {
+					delete instances[ad.authToken];
+					reject(err);
+				});
+			return;
+		}
+
+		resolve(orchestrator);
+	});
+}
+
+function authenticateP(req) {
+	return new Promise((resolve, reject) => {
+		if (!req.body.orgId) {
+			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes" + req.params[0];
+			if (presets.map[url]) {
+				req.body.orgId = req.params.orgId;
+				req.body.tenantName = req.params.tenantName;
+				req.body.clientId = presets.authKeys[presets.map[url]].clientId;
+				req.body.userKey = presets.authKeys[presets.map[url]].userKey;
+				req.body.environment = presets.authKeys[presets.map[url]].environment;
+			}
+		}
+		Orchestrator2.authenticateP(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
+			.then((authToken) => {
+				resolve(authToken);
+			})
+			.catch((err) => {
+				reject(err);
+			});
+	});
+};
 
 function authenticate(req, res) {
-	Orchestrator2.authenticate(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
+	authenticateP(req)
 		.then((authToken) => {
 			res.type('json').send({authToken: authToken});
 		})
 		.catch((err) => {
+			console.log(err);
 			res.type('json').status(401).send(err);
 		});
-};
+}
 
-function getJobStatus(req, res, cb) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		var msg = {error: 'please retry'};
-		if (res)
-			res.type('json').status(503).send(msg);
-		else
-			cb(msg);
-		return;
-	}
+function getJobStatusP(req) {
+	return new Promise((resolve, reject) => {
+		getAuthDetailsP(req)
+			.then((args) => {
+				var ad = args[0];
+				var orchestrator = args[1];
+				ad.id = req.params.id.replace(/\D/g, '');
+				Orchestrator2.getJobDetailsP(orchestrator, ad)
+					.then((response) => {
+						resolve([ad.id, response]);
+					})
+					.catch((err) => {
+						reject([ad.id, err]);
+					});
+			})
+			.catch((err) => {
+				reject([-1, err]);
+			});
+	});
+}
 
-	ad.id = req.params.id.replace(/\D/g, '');
-	Orchestrator2.getJobDetails(orchestrator, ad)
-		.then((response) => {
-			if (res)
-				res.type('json').send(response);
-			else
-				cb(ad.id, response);
+function getJobStatus(req, res) {
+	getJobStatusP(req)
+		.then((args) => {
+			var id = args[0];
+			var response = args[1];
+			res.type('json').send(response);
 		})
-		.catch((err) => {
-			if (res)
-				res.type('json').status(500).send({error: err});
-			else
-				cb(ad.id, {finished: true, error: err});
-		});
+		.catch((args) => {
+			var id = args[0];
+			var err = args[1];
+			sendError(res, err);
+		})
 }
 
 function getTransactionStatus(req, res) {
-	return getTransactionStatusCB(req, res);
+	getTransactionStatusP(req, res);
 }
 
-function getTransactionStatusCB(req, res, fID, cb) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		var msg = {error: 'please retry'};
-		if (res)
-			res.type('json').status(503).send(msg);
-		else
-			cb(msg);
-		return;
-	}
+function getTransactionStatusP(req, res, fID) {
+	return new Promise((resolve, reject) => {
+		getAuthDetailsP(req)
+			.then((args) => {
+				var ad = args[0];
+				var orchestrator = args[1];
+				if (!fID) {
+					var folder = '';
+					if (req.params && req.params[0])
+						folder = req.params[0];
+					ad.id = folder.replace(/^.*\//, '');
+					var fName = folder.replace(/\/[^\/]*$/, '');
+					fID = instances[ad.authToken].folders["/" + fName];
+				}
 
-	if (!fID) {
-		var folder = '';
-		if (req.params && req.params[0])
-			folder = req.params[0];
-		ad.id = folder.replace(/^.*\//, '');
-		var fName = folder.replace(/\/[^\/]*$/, '');
-		fID = instances[ad.authToken].folders["/" + fName];
-	}
+				if (!ad.id)
+					ad.id = req.params.id.replace(/[\D]/g, '');
 
-	if (!ad.id)
-		ad.id = req.params.id.replace(/[\D]/g, '');
-
-	Orchestrator2.getTransactionStatus(orchestrator, ad, fID)
-		.then((response) => {
-			var rsp = {
-				"Status": response.Status,
-				"Output": response.Output,
-				"ProcessingExceptionType": response.ProcessingExceptionType,
-				"ProcessingException": response.ProcessingException
-			};
-			if (res)
-				res.type('json').send(rsp);
-			else
-				cb(ad.id, rsp);
-		})
-		.catch((err) => {
-			if (res)
-				res.type('json').status(500).send({error: err});
-			else
-				cb(ad.id, {finished: true, error: err});
-		});
+				Orchestrator2.getTransactionStatusP(orchestrator, ad, fID)
+					.then((response) => {
+						var rsp = {
+							"Status": response.Status,
+							"Output": response.Output,
+							"ProcessingExceptionType": response.ProcessingExceptionType,
+							"ProcessingException": response.ProcessingException
+						};
+						if (res)
+							res.type('json').send(rsp);
+						resolve([ad.id, rsp]);
+					})
+					.catch((err) => {
+						if (res)
+							res.type('json').status(500).send({error: err});
+						reject([ad.id, {error: err}]);
+					});
+			})
+			.catch((err) => {
+				reject(err);
+			});
+	});
 }
 
 function startProcess(ad, orchestrator, process, req, res) {
@@ -149,7 +235,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 		}
 	}
 
-	Orchestrator2.startProcess(ad, orchestrator, instances[ad.authToken].folders[process.folder], process, ia)
+	Orchestrator2.startProcessP(ad, orchestrator, instances[ad.authToken].folders[process.folder], process, ia)
 		.then((jID) => {
 			var rReq = {
 				params: {
@@ -177,7 +263,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 }
 
 function addQueueItem(ad, orchestrator, queue, req, res) {
-	Orchestrator2.addQueueItem(ad, orchestrator, instances[ad.authToken].folders[queue.folder], queue, req.body)
+	Orchestrator2.addQueueItemP(ad, orchestrator, instances[ad.authToken].folders[queue.folder], queue, req.body)
 		.then((transactionId) => {
 			var rReq = {
 				params: {
@@ -205,10 +291,10 @@ function addQueueItem(ad, orchestrator, queue, req, res) {
 		});
 }
 
-function loadFolders(ad, orchestrator, fIDs) {
-	console.log(`Loading folders (${ad.orgId}/${ad.tenantName})`);
+function loadFoldersP(ad, orchestrator, fIDs) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadFolders(ad, orchestrator, fIDs)
+		console.log(`Loading folders (${ad.orgId}/${ad.tenantName})`);
+		Orchestrator2.loadFoldersP(ad, orchestrator, fIDs)
 			.then((data) => {
 			    for (var i=0;i<data.Count;i++) {
 			    	instances[ad.authToken].folders["/" + data.PageItems[i].FullyQualifiedName] = data.PageItems[i].Id;
@@ -221,29 +307,29 @@ function loadFolders(ad, orchestrator, fIDs) {
 	});
 }
 
-function loadProcesses(ad, orchestrator, f) {
+function loadProcessesP(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadProcesses(ad, orchestrator, instances[ad.authToken].folders[f], f)
+		Orchestrator2.loadProcessesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((processes) => {
 				for (var i=0;i<processes.length;i++) {
 			    	instances[ad.authToken].processes.push(processes[i]);
 				}
 			    resolve(orchestrator);
 			})
-			.catch ((err) => {
+			.catch((err) => {
 		        console.error('Error: ' + err);
 		        resolve(orchestrator);
 			});
 	});
 }
 
-function loadQueues(ad, orchestrator, f) {
+function loadQueuesP(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadQueues(ad, orchestrator, instances[ad.authToken].folders[f], f)
+		Orchestrator2.loadQueuesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((queues) => {
 				for (var i=0;i<queues.length;i++) {
 			    	instances[ad.authToken].queues.push(queues[i]);
-			    	Orchestrator2.loadQueueDetails(ad, orchestrator, instances[ad.authToken].folders[f], f, queues[i].id)
+			    	Orchestrator2.loadQueueDetailsP(ad, orchestrator, instances[ad.authToken].folders[f], f, queues[i].id)
 			    		.then((queue) => {
 			    			for (var i=0;i<instances[ad.authToken].queues.length;i++) {
 			    				if (instances[ad.authToken].queues[i].id == queue.id) {
@@ -259,7 +345,7 @@ function loadQueues(ad, orchestrator, f) {
 				}
 			    resolve(orchestrator);
 			})
-			.catch ((err) => {
+			.catch((err) => {
 		        console.error('Error: ' + err);
 		        resolve(orchestrator);
 			});
@@ -268,10 +354,17 @@ function loadQueues(ad, orchestrator, f) {
 
 function refreshFolders(req, res) {
 	console.log("Refreshing folders");
-	var ad = getAuthDetails(req);
-	delete instances[ad.authToken];
-	getOrchestrator(ad);
-	res.send({response: "Done"});
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			delete instances[ad.authToken];
+			getOrchestratorP(ad);
+			res.send({response: "Done"});
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function loadEntities(ad) {
@@ -294,25 +387,29 @@ function loadEntities(ad) {
 	instances[ad.authToken].loaded = true;
 }
 
-function init(ad, orchestrator) {
-	loadFolders(ad, orchestrator, {})
-		.then(() => {
-			console.log(`Loading processes (${ad.orgId}/${ad.tenantName})`);
-			var pList = [];
-			for (var f in instances[ad.authToken].folders) {
-				pList.push(loadProcesses(ad, orchestrator, f));
-				pList.push(loadQueues(ad, orchestrator, f));
-			}
+function initP(ad, orchestrator) {
+	return new Promise((resolve, reject) => {
+		loadFoldersP(ad, orchestrator, {})
+			.then(() => {
+				console.log(`Loading processes (${ad.orgId}/${ad.tenantName})`);
+				var pList = [];
+				for (var f in instances[ad.authToken].folders) {
+					pList.push(loadProcessesP(ad, orchestrator, f));
+					pList.push(loadQueuesP(ad, orchestrator, f));
+				}
 
-			Promise.all(pList)
-				.then(() => {
-					loadEntities(ad)
-				});
+				Promise.all(pList)
+					.then(() => {
+						loadEntities(ad);
+						resolve();
+					});
 
-		})
-		.catch((err) => {
-			console.error(err);
-		})
+			})
+			.catch((err) => {
+				console.log(err);
+				reject(err);
+			})
+	});
 }
 
 function renderFolder(ad, root, res) {
@@ -398,205 +495,213 @@ function renderQueue(ad, process, res) {
 }
 
 function getFolders(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
-
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
-	if (!renderFolder(ad, folder, res)) {
-		res.status(404).send({error: "folder not found"});
-	}
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
+			if (!renderFolder(ad, folder, res)) {
+				res.status(404).send({error: "folder not found"});
+			}
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function getDeleteEntities(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
-
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
-	folder = folder.replace(/\/+$/, '');
-	if (req.method == "GET")
-		for (e in instances[ad.authToken].entities) {
-			if (e == '/' + folder) {
-				if (instances[ad.authToken].entities[e].list) {
-					// list
-					var oReq = {
-						params: req.params,
-						body: {}
-					};
-					if (req.query._callBackURL)
-						oReq.body._callBackURL = req.query._callBackURL;
-					startProcess(ad, orchestrator, instances[ad.authToken].entities[e].list, oReq, res);
-					return;
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
+			folder = folder.replace(/\/+$/, '');
+			if (req.method == "GET")
+				for (e in instances[ad.authToken].entities) {
+					if (e == '/' + folder) {
+						if (instances[ad.authToken].entities[e].list) {
+							// list
+							var oReq = {
+								params: req.params,
+								body: {}
+							};
+							if (req.query._callBackURL)
+								oReq.body._callBackURL = req.query._callBackURL;
+							startProcess(ad, orchestrator, instances[ad.authToken].entities[e].list, oReq, res);
+							return;
+						}
+						break;
+					}
 				}
-				break;
+
+			var id = folder.replace(/.*\//, '');
+			folder = folder.replace(/\/[^\/]*$/, '');
+
+			var oReq = {
+				params: req.params,
+				body: {
+					id: id
+				}
+			};
+			if (req.query._callBackURL)
+				oReq.body._callBackURL = req.query._callBackURL;
+
+			for (e in instances[ad.authToken].entities) {
+				if (e == '/' + folder) {
+					if (instances[ad.authToken].entities[e].read && req.method == "GET") {
+						// read
+						startProcess(ad, orchestrator, instances[ad.authToken].entities[e].read, oReq, res);
+						return;
+					}
+					if (instances[ad.authToken].entities[e].delete && req.method == "DELETE") {
+						// read
+						startProcess(ad, orchestrator, instances[ad.authToken].entities[e].delete, oReq, res);
+						return;
+					}
+					break;
+				}
 			}
-		}
 
-	var id = folder.replace(/.*\//, '');
-	folder = folder.replace(/\/[^\/]*$/, '');
-
-	var oReq = {
-		params: req.params,
-		body: {
-			id: id
-		}
-	};
-	if (req.query._callBackURL)
-		oReq.body._callBackURL = req.query._callBackURL;
-
-	for (e in instances[ad.authToken].entities) {
-		if (e == '/' + folder) {
-			if (instances[ad.authToken].entities[e].read && req.method == "GET") {
-				// read
-				startProcess(ad, orchestrator, instances[ad.authToken].entities[e].read, oReq, res);
-				return;
-			}
-			if (instances[ad.authToken].entities[e].delete && req.method == "DELETE") {
-				// read
-				startProcess(ad, orchestrator, instances[ad.authToken].entities[e].delete, oReq, res);
-				return;
-			}
-			break;
-		}
-	}
-
-	res.status(404).send({error: "entity not found"});
+			res.status(404).send({error: "entity not found"});
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function postPatchEntities(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
 
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
+			var id = folder.replace(/.*\//, '');
+			folder = folder.replace(/\/[^\/]*$/, '');
 
-	var id = folder.replace(/.*\//, '');
-	folder = folder.replace(/\/[^\/]*$/, '');
+			var oReq = req;
+			if (id)
+				oReq.body.id = id;
 
-	var oReq = req;
-	if (id)
-		oReq.body.id = id;
+			if (req.query._callBackURL)
+				oReq.body._callBackURL = req.query._callBackURL;
 
-	if (req.query._callBackURL)
-		oReq.body._callBackURL = req.query._callBackURL;
-
-	for (e in instances[ad.authToken].entities) {
-		if (e == '/' + folder) {
-			if (instances[ad.authToken].entities[e].update && req.method == "PATCH") {
-				// update
-				startProcess(ad, orchestrator, instances[ad.authToken].entities[e].update, oReq, res);
-				return;
+			for (e in instances[ad.authToken].entities) {
+				if (e == '/' + folder) {
+					if (instances[ad.authToken].entities[e].update && req.method == "PATCH") {
+						// update
+						startProcess(ad, orchestrator, instances[ad.authToken].entities[e].update, oReq, res);
+						return;
+					}
+					if (instances[ad.authToken].entities[e].create && req.method == "POST") {
+						// update
+						startProcess(ad, orchestrator, instances[ad.authToken].entities[e].create, oReq, res);
+						return;
+					}
+					break;
+				}
 			}
-			if (instances[ad.authToken].entities[e].create && req.method == "POST") {
-				// update
-				startProcess(ad, orchestrator, instances[ad.authToken].entities[e].create, oReq, res);
-				return;
-			}
-			break;
-		}
-	}
 
-	res.status(404).send({error: "entity not found"});
+			res.status(404).send({error: "entity not found"});
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function getProcess(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
 
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
-
-	if (!renderProcces(ad, folder, res)) {
-		res.status(404).send({error: "process not found"});
-	}
+			if (!renderProcces(ad, folder, res)) {
+				res.status(404).send({error: "process not found"});
+			}	
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function postProcess(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
 
-	var pName = folder.replace(/^.*\//, '');
-	var fName = '/' + folder.replace(/\/[^\/]*$/, '');
+			var pName = folder.replace(/^.*\//, '');
+			var fName = '/' + folder.replace(/\/[^\/]*$/, '');
 
-	for (var i=0;i<instances[ad.authToken].processes.length;i++) {
-		var p = instances[ad.authToken].processes[i];
-		if (p.folder == fName && p.name == pName) {
-			startProcess(ad, orchestrator, p, req, res);
-			return true;
-		}
-	}
-	res.status(404).send({error: "process not found"});
-	return false;
+			for (var i=0;i<instances[ad.authToken].processes.length;i++) {
+				var p = instances[ad.authToken].processes[i];
+				if (p.folder == fName && p.name == pName) {
+					startProcess(ad, orchestrator, p, req, res);
+					return true;
+				}
+			}
+			res.status(404).send({error: "process not found"});
+			return false;
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function getQueue(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
 
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
-
-	if (!renderQueue(ad, folder, res)) {
-		res.status(404).send({error: "queue not found"});
-	}
+			if (!renderQueue(ad, folder, res)) {
+				res.status(404).send({error: "queue not found"});
+			}
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function postQueue(req, res) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
-	var folder = '';
-	if (req.params && req.params[0])
-		folder = req.params[0];
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var folder = '';
+			if (req.params && req.params[0])
+				folder = req.params[0];
 
-	var qName = folder.replace(/^.*\//, '');
-	var fName = '/' + folder.replace(/\/[^\/]*$/, '');
+			var qName = folder.replace(/^.*\//, '');
+			var fName = '/' + folder.replace(/\/[^\/]*$/, '');
 
-	for (var i=0;i<instances[ad.authToken].queues.length;i++) {
-		var q = instances[ad.authToken].queues[i];
-		if (q.folder == fName && q.name == qName) {
-			addQueueItem(ad, orchestrator, q, req, res);
-			return true;
-		}
-	}
-	res.status(404).send({error: "process not found"});
-	return false;
+			for (var i=0;i<instances[ad.authToken].queues.length;i++) {
+				var q = instances[ad.authToken].queues[i];
+				if (q.folder == fName && q.name == qName) {
+					addQueueItem(ad, orchestrator, q, req, res);
+					return;
+				}
+			}
+			res.status(404).send({error: "process not found"});
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function getFoldersHtml(req, res) {
@@ -616,13 +721,33 @@ function processCallBacks() {
 		if (!callBacks[id].checking) {
 			callBacks[id].checking = true;
 			if (callBacks[id].req.type == "process")
-				getJobStatus(callBacks[id].req, null, (id, response) => {
-					if (response.finished === true || response.EndTime) {
-						if (response.Result)
-							response.Result = cleanUpEntities(response.Result);
-						if(response.State == 'Faulted') {
-							delete response.Result;
+				getJobStatusP(callBacks[id].req)
+					.then((args) => {
+						var id = args[0];
+						var response = args[1];
+						if (response.EndTime) {
+							if (response.Result)
+								response.Result = cleanUpEntities(response.Result);
+							if(response.State == 'Faulted') {
+								delete response.Result;
+							}
+							if (!callBacks[id].res) {
+								// async
+								request.post(callBacks[id].callBackURL, {json: response.Result?response.Result:response}, (err, res, data) => {
+									if (err) console.error("Error callback'ing: " + err);
+								});
+							} else {
+								//sync
+								callBacks[id].res.status(200).send(response.Result?response.Result:response);
+							}
+							delete callBacks[id];
 						}
+						else
+							callBacks[id].checking = false;
+					})
+					.catch((args) => {
+						var id = args[0];
+						var err = args[1];
 						if (!callBacks[id].res) {
 							// async
 							request.post(callBacks[id].callBackURL, {json: response.Result?response.Result:response}, (err, res, data) => {
@@ -630,32 +755,44 @@ function processCallBacks() {
 							});
 						} else {
 							//sync
-							var s = (response.State != 'Faulted')?200:500;
-							callBacks[id].res.status(s).send(response.Result?response.Result:response);
+							callBacks[id].res.status(500).send(response.Result?response.Result:response);
 						}
 						delete callBacks[id];
-					}
-					else
-						callBacks[id].checking = false;
-				});
+					});
 			else {
-				getTransactionStatusCB(callBacks[id].req, null, callBacks[id].fID, (id, response) => {
-					if(response.Status == "New" || response.Status == "InProgress") {
-						callBacks[id].checking = false;
-						return;
-					}
-					if (!callBacks[id].res) {
-						// async
-						request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
-								if (err) console.error("Error callback'ing: " + err);
-							});
-					} else {
-						//sync
-						var s = response.finished?500:200;
-						callBacks[id].res.status(s).send(response);
-					}
-					delete callBacks[id];
-				});
+				getTransactionStatusP(callBacks[id].req, null, callBacks[id].fID)
+					.then((args) => {
+						var id = args[0];
+						var response = args[1];
+						if(response.Status == "New" || response.Status == "InProgress") {
+							callBacks[id].checking = false;
+							return;
+						}
+						if (!callBacks[id].res) {
+							// async
+							request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
+									if (err) console.error("Error callback'ing: " + err);
+								});
+						} else {
+							//sync
+							callBacks[id].res.status(200).send(response);
+						}
+						delete callBacks[id];
+					})
+					.catch((args) => {
+						var id = args[0];
+						var response = args[1];
+						if (!callBacks[id].res) {
+							// async
+							request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
+									if (err) console.error("Error callback'ing: " + err);
+								});
+						} else {
+							//sync
+							callBacks[id].res.status(500).send(response);
+						}
+						delete callBacks[id];
+					});
 			}
 		}
 	}
@@ -682,36 +819,44 @@ var swagger = new Document({
 });
 
 function swaggerCB(req, res, next) {
-	var ad = getAuthDetails(req);
-	var orchestrator = getOrchestrator(ad);
-	if (!ad.authToken || !instances[ad.authToken] || !instances[ad.authToken].folders) {
-		res.type('json').status(503).send({error: 'please retry'});
-		return;
-	}
-	var paths = Swagger.getPaths(ad, instances[ad.authToken]);
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			var paths = Swagger.getPaths(ad, instances[ad.authToken]);
+			var doc = new Document({
+			    description: "Swagger deffinition",
+			    version: "1.0.0",
+			    title: "UiPath",
+			    paths: paths
+			});
 
-	var doc = new Document({
-	    description: "Swagger deffinition",
-	    version: "1.0.0",
-	    title: "UiPath",
-	    paths: paths
-	});
-
-	swaggerUi.setup(doc);
-	next();
+			swaggerUi.setup(doc);
+			next();
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 function getStatus(req, res) {
-	var ad = getAuthDetails(req);
-	if (instances[ad.authToken]) 
-		if (instances[ad.authToken].loaded)
-			res.send({status: "loaded"});
-		else
-			res.send({status: "please retry"});
-	else {
-		getOrchestrator(ad);
-		res.status(404).send({error: "not found"});
-	}
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			if (instances[ad.authToken]) 
+				if (instances[ad.authToken].loaded)
+					res.send({status: "loaded"});
+				else
+					res.send({status: "please retry"});
+			else {
+				getOrchestratorP(ad);
+				res.status(404).send({error: "not found"});
+			}
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
 }
 
 app.use(express.json());

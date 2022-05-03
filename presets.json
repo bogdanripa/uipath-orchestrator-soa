@@ -1,0 +1,12 @@
+{
+	"authKeys": {
+		"k1": {
+			"environment": "production",
+			"userKey": "YOURKEY",
+			"clientId": "CLIENTID"
+		}
+	},
+	"map": {
+		"/ORGID/TENANTNAME/processes/FOLDER/PROCESSNAME": "k1"
+	}
+}

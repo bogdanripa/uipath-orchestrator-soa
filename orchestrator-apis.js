@@ -1,6 +1,6 @@
 const Orchestrator = require('uipath-orchestrator');
 
-module.exports.authenticate = (orgId, tenantName, clientId, userKey, environment) => {
+module.exports.authenticateP = (orgId, tenantName, clientId, userKey, environment) => {
 	return new Promise((resolve, reject) => {
 		var oJSON = {
 			serviceInstanceLogicalName: tenantName,
@@ -43,13 +43,13 @@ module.exports.getOrchestrator = (tenantName, authToken) => {
 	return orchestrator;
 };
 
-module.exports.getJobDetails = (orchestrator, ad) => {
+module.exports.getJobDetailsP = (orchestrator, ad) => {
 	return new Promise((resolve, reject) => {
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/Jobs('+ad.id+')';
 		console.log("GET " + url);
 		orchestrator.get(url, {}, function (err, data) {
 			if (err) {
-				console.error('Error: ' + err);
+				console.error(err);
 				reject(err);
 				return;
 			}
@@ -66,7 +66,7 @@ module.exports.getJobDetails = (orchestrator, ad) => {
 	});
 };
 
-module.exports.getTransactionStatus = (orchestrator, ad, fID) => {
+module.exports.getTransactionStatusP = (orchestrator, ad, fID) => {
 	return new Promise((resolve, reject) => {
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueItems('+ad.id+')';
 		console.log("GET " + url);
@@ -82,7 +82,7 @@ module.exports.getTransactionStatus = (orchestrator, ad, fID) => {
 	});
 };
 
-module.exports.startProcess = (ad, orchestrator, fID, process, ia) => {
+module.exports.startProcessP = (ad, orchestrator, fID, process, ia) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {
 			"startInfo": {
@@ -111,7 +111,7 @@ module.exports.startProcess = (ad, orchestrator, fID, process, ia) => {
 	});
 }
 
-module.exports.addQueueItem = (ad, orchestrator, fID, queue, qi) => {
+module.exports.addQueueItemP = (ad, orchestrator, fID, queue, qi) => {
 	return new Promise((resolve, reject) => {
 		if (qi.content) {
 			try {
@@ -181,7 +181,7 @@ function _loadFolders(ad, orchestrator, fIDs, cb) {
 	});
 }
 
-module.exports.loadFolders = (ad, orchestrator, fIDs) => {
+module.exports.loadFoldersP = (ad, orchestrator, fIDs) => {
 	return new Promise((resolve, reject) => {
 		_loadFolders(ad, orchestrator, fIDs, (data, err) => {
 			if (err)
@@ -192,7 +192,7 @@ module.exports.loadFolders = (ad, orchestrator, fIDs) => {
 	});
 };
 
-module.exports.loadProcesses = (ad, orchestrator, fID, f) => {
+module.exports.loadProcessesP = (ad, orchestrator, fID, f) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {};
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/Releases?$select=Id,IsLatestVersion,IsProcessDeleted,ProcessKey,ProcessVersion,Description,Arguments,Name,JobPriority,FeedId,RequiresUserInteraction,ProcessType,EntryPoint,IsCompiled,TargetFramework,IsAttended,Tags,Key&$top=100&$expand=Environment,CurrentVersion,EntryPoint&$orderby=Name%20asc';
@@ -232,7 +232,7 @@ module.exports.loadProcesses = (ad, orchestrator, fID, f) => {
 	});
 }
 
-module.exports.loadQueues = (ad, orchestrator, fID, f) => {
+module.exports.loadQueuesP = (ad, orchestrator, fID, f) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {};
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueDefinitions';
@@ -257,7 +257,7 @@ module.exports.loadQueues = (ad, orchestrator, fID, f) => {
 	});
 }
 
-module.exports.loadQueueDetails = (ad, orchestrator, fID, f, qID) => {
+module.exports.loadQueueDetailsP = (ad, orchestrator, fID, f, qID) => {
 	return new Promise((resolve, reject) => {
 		var apiQuery = {};
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueDefinitions('+qID+')';
