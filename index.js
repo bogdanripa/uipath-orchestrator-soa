@@ -115,7 +115,11 @@ function getOrchestratorP(ad) {
 function authenticateP(req) {
 	return new Promise((resolve, reject) => {
 		if (!req.body.orgId) {
-			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes" + req.params[0];
+			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
+			if (req.params[0][0] != '/')
+				url += '/';
+			url += req.params[0];
+			console.log(url);
 			if (presets.map[url]) {
 				req.body.orgId = req.params.orgId;
 				req.body.tenantName = req.params.tenantName;
@@ -252,7 +256,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 
 			if (req.body._callBackURL) {
 				callBacks[jID].callBackURL = req.body._callBackURL;
-				res.type('json').status(202).send({jobId: jID, pullUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/jobs/" + jID});
+				res.type('json').status(202).send({jobId: jID, pollingUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/jobs/" + jID});
 			} else {
 				callBacks[jID].res = res;
 			}
@@ -281,7 +285,7 @@ function addQueueItem(ad, orchestrator, queue, req, res) {
 
 			if (req.body._callBackURL) {
 				callBacks[transactionId].callBackURL = req.body._callBackURL;
-				res.type('json').status(202).send({transactionId: transactionId, pullUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/transactions" + queue.folder + "/" + transactionId});
+				res.type('json').status(202).send({transactionId: transactionId, pollingUrl: "http://" + req.headers.host + "/" + req.params.orgId + "/" + req.params.tenantName + "/transactions" + queue.folder + "/" + transactionId});
 			} else {
 				callBacks[transactionId].res = res;
 			}
@@ -656,6 +660,7 @@ function postProcess(req, res) {
 			return false;
 		})
 		.catch((err) => {
+			console.log(err);
 			sendError(res, err);
 		});
 }
