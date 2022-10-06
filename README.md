@@ -1,8 +1,13 @@
 # Exposing UiPath Processes and Queues in a SOA
 Exposes Orchestrator processes and queues as REST APIs, including CRUD when certain criteria are met
 
+## Setup
+1. git clone this repo
+2. npm update
+
+
 ## Running the server
-node index.js
+npm start
 
 ## Authentication
 1. Go to http://localhost:8081/auth.html
