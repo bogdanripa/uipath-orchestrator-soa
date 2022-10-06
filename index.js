@@ -1,7 +1,6 @@
 const util = require('util');
 const {cleanUpEntities} = require('./functions.js');
-const Orchestrator = require('uipath-orchestrator');
-const Orchestrator2 = require("./orchestrator-apis.js");
+const Orchestrator = require("./orchestrator-apis.js");
 const cookieParser = require("cookie-parser");
 const swaggerUi = require("swagger-ui-express");
 const Swagger = require("./swagger.js");
@@ -97,7 +96,7 @@ function getOrchestratorP(ad) {
 			reject();
 			return;
 		}
-		var orchestrator = Orchestrator2.getOrchestrator(ad.tenantName, ad.authToken);
+		var orchestrator = Orchestrator.getOrchestrator(ad.tenantName, ad.authToken);
 
 		if (!instances[ad.authToken]) {
 			instances[ad.authToken] = {
@@ -141,7 +140,7 @@ function authenticateP(req) {
 				req.body.environment = presets.authKeys[presets.map[url]].environment;
 			}
 		}
-		Orchestrator2.authenticateP(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
+		Orchestrator.authenticateP(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
 			.then((authToken) => {
 				// save auth token for further use
 				if (presets.map[url]) {
@@ -174,7 +173,7 @@ function getJobStatusP(req) {
 				var ad = args[0];
 				var orchestrator = args[1];
 				ad.id = req.params.id.replace(/\D/g, '');
-				Orchestrator2.getJobDetailsP(orchestrator, ad)
+				Orchestrator.getJobDetailsP(orchestrator, ad)
 					.then((response) => {
 						resolve([ad.id, response]);
 					})
@@ -224,7 +223,7 @@ function getTransactionStatusP(req, res, fID) {
 				if (!ad.id)
 					ad.id = req.params.id.replace(/[\D]/g, '');
 
-				Orchestrator2.getTransactionStatusP(orchestrator, ad, fID)
+				Orchestrator.getTransactionStatusP(orchestrator, ad, fID)
 					.then((response) => {
 						var rsp = {
 							"Status": response.Status,
@@ -257,7 +256,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 		}
 	}
 
-	Orchestrator2.startProcessP(ad, orchestrator, instances[ad.authToken].folders[process.folder], process, ia)
+	Orchestrator.startProcessP(ad, orchestrator, instances[ad.authToken].folders[process.folder], process, ia)
 		.then((jID) => {
 			var rReq = {
 				params: {
@@ -285,7 +284,7 @@ function startProcess(ad, orchestrator, process, req, res) {
 }
 
 function addQueueItem(ad, orchestrator, queue, req, res) {
-	Orchestrator2.addQueueItemP(ad, orchestrator, instances[ad.authToken].folders[queue.folder], queue, req.body)
+	Orchestrator.addQueueItemP(ad, orchestrator, instances[ad.authToken].folders[queue.folder], queue, req.body)
 		.then((transactionId) => {
 			var rReq = {
 				params: {
@@ -316,7 +315,7 @@ function addQueueItem(ad, orchestrator, queue, req, res) {
 function loadFoldersP(ad, orchestrator, fIDs) {
 	return new Promise((resolve, reject) => {
 		console.log(`Loading folders (${ad.orgId}/${ad.tenantName})`);
-		Orchestrator2.loadFoldersP(ad, orchestrator, fIDs)
+		Orchestrator.loadFoldersP(ad, orchestrator, fIDs)
 			.then((data) => {
 			    for (var i=0;i<data.Count;i++) {
 			    	instances[ad.authToken].folders["/" + data.PageItems[i].FullyQualifiedName] = data.PageItems[i].Id;
@@ -331,7 +330,7 @@ function loadFoldersP(ad, orchestrator, fIDs) {
 
 function loadProcessesP(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadProcessesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
+		Orchestrator.loadProcessesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((processes) => {
 				for (var i=0;i<processes.length;i++) {
 			    	instances[ad.authToken].processes.push(processes[i]);
@@ -347,11 +346,11 @@ function loadProcessesP(ad, orchestrator, f) {
 
 function loadQueuesP(ad, orchestrator, f) {
 	return new Promise((resolve, reject) => {
-		Orchestrator2.loadQueuesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
+		Orchestrator.loadQueuesP(ad, orchestrator, instances[ad.authToken].folders[f], f)
 			.then((queues) => {
 				for (var i=0;i<queues.length;i++) {
 			    	instances[ad.authToken].queues.push(queues[i]);
-			    	Orchestrator2.loadQueueDetailsP(ad, orchestrator, instances[ad.authToken].folders[f], f, queues[i].id)
+			    	Orchestrator.loadQueueDetailsP(ad, orchestrator, instances[ad.authToken].folders[f], f, queues[i].id)
 			    		.then((queue) => {
 			    			for (var i=0;i<instances[ad.authToken].queues.length;i++) {
 			    				if (instances[ad.authToken].queues[i].id == queue.id) {
