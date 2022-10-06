@@ -10,16 +10,16 @@ Exposes Orchestrator processes and queues as REST APIs, including CRUD when cert
 npm start
 
 ## Authentication
-1. Go to http://localhost:8081/auth.html
+1. Go to http://localhost:8080/auth.html
 2. Enter your Orchestrator API credentials. These can be found in https://cloud.uipath.com/ -> Admin -> Expand your tenant -> Click the Orchestrator API icon
 3. Click submit
 
-Alternatively you can call the "http://localhost:8081/auth" API endpoint just like we call it in "auth.html".
+Alternatively you can call the "http://localhost:8080/auth" API endpoint just like we call it in "auth.html".
 
 ## How to use
-Once authenticated, go to http://localhost:8081/ORGID/TENANTNAME/docs/ for the auto-generated swagger documenation.
+Once authenticated, go to http://localhost:8080/ORGID/TENANTNAME/docs/ for the auto-generated swagger documenation.
 
-Go to http://localhost:8081/ORGID/TENANTNAME/folders.html to browse through your folders, queues and processes in your browser.
+Go to http://localhost:8080/ORGID/TENANTNAME/folders.html to browse through your folders, queues and processes in your browser.
 
 When viewing a process you will be able to start it right from your browser. 
 
@@ -30,57 +30,57 @@ Leaving the CallBack URL empty will result in a sync call. Otherwise the call wi
 
 # Endpoints
 
-`GET http://localhost:8081/auth`
+`GET http://localhost:8080/auth`
 
 Authenticates the current user - you can see an example of calling it in auth.html
 
 Note: To call any futher API, a Bearer-based authentication token bust be sent (it is returned from the auth call)
 
-`GET http://localhost:8081/ORGID/TENANTNAME/status`
+`GET http://localhost:8080/ORGID/TENANTNAME/status`
 
 Returns the status of the current authentication session. Once auth is done, we fetch the full list of folders and processes from Orchestrator. This list is then cached for that connection. The status returns "loaded" once the list is done fetching and caching. You can see an example of calling this API in auth.html
 
-`GET http://localhost:8081/ORGID/TENANTNAME/refresh`
+`GET http://localhost:8080/ORGID/TENANTNAME/refresh`
 
 Refreshes the list of folders and processes
 
-`GET http://localhost:8081/ORGID/TENANTNAME/folders/`
+`GET http://localhost:8080/ORGID/TENANTNAME/folders/`
 
 Returns a list of root folders
 
-`GET http://localhost:8081/ORGID/TENANTNAME/folders/FOLDERA/`
+`GET http://localhost:8080/ORGID/TENANTNAME/folders/FOLDERA/`
 
 Returns a list of sub-folders for "FOLDERA", together with a list of processes and queues available in that folder
 
-`GET http://localhost:8081/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME`
+`GET http://localhost:8080/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME`
 
 Returns details for PROCESSNAME that exists in FOLDERA
 
-`POST http://localhost:8081/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME`
+`POST http://localhost:8080/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME`
 
 Starts PROCESSNAME and waits for the response
 
-`POST http://localhost:8081/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME` - with a "\_callBackURL" POST parameter
+`POST http://localhost:8080/ORGID/TENANTNAME/processes/FOLDERA/PROCESSNAME` - with a "\_callBackURL" POST parameter
 
 Starts PROCESSNAME and returns the Job ID. The callback url is called once the job finishes.
 
-`GET http://localhost:8081/ORGID/TENANTNAME/jobs/1234`
+`GET http://localhost:8080/ORGID/TENANTNAME/jobs/1234`
 
 Returns the status for the job ID 1234. Use this API fol polling for job status.
 
-`GET http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
+`GET http://localhost:8080/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
 
 Returns details for QUEUENAME that exists in FOLDERA
 
-`POST http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
+`POST http://localhost:8080/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME`
 
 Adds a queue item to QUEUENAME that is defined in FOLDERA and waits for it to be transactioned
 
-`POST http://localhost:8081/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME` - with a "\_callBackURL" POST parameter
+`POST http://localhost:8080/ORGID/TENANTNAME/queues/FOLDERA/QUEUENAME` - with a "\_callBackURL" POST parameter
 
 Adds a queue item to QUEUENAME that is defined in FOLDERA and returns the Transaction ID. The callback url is called once the queue item is transactioned.
 
-`GET http://localhost:8081/ORGID/TENANTNAME/transactions/FOLDERA/1234`
+`GET http://localhost:8080/ORGID/TENANTNAME/transactions/FOLDERA/1234`
 
 Returns the status for the transaction ID 1234. Use this API fol polling for job status.
 
@@ -97,23 +97,23 @@ Here is an example:
 Say we have a folder called "university" with a sub-folder called "students".
 If in this folder we have the following 5 proceses: list, create, read, update, delete, the following end-points will be auto-generated and mapped to their respective processes:
 
-`GET http://localost:8081/ORGID/TENANTNAME/entities/university/students/`
+`GET http://localost:8080/ORGID/TENANTNAME/entities/university/students/`
 
 starts the "list" process
 
-`POST http://localost:8081/ORGID/TENANTNAME/entities/university/students/`
+`POST http://localost:8080/ORGID/TENANTNAME/entities/university/students/`
 
 starts the "create" process, and the POST arguments are mapped to the process's input arguments
 
-`GET http://localost:8081/ORGID/TENANTNAME/entities/university/students/12345`
+`GET http://localost:8080/ORGID/TENANTNAME/entities/university/students/12345`
 
 starts the "read" process with the "id" argument equals to "12345"
 
-`PATCH http://localost:8081/ORGID/TENANTNAME/entities/university/students/12345`
+`PATCH http://localost:8080/ORGID/TENANTNAME/entities/university/students/12345`
 
 starts the "update" process with the "id" argument equals to "12345", plus the other POST arguments mapped to the process's input args
 
-`DELETE http://localost:8081/ORGID/TENANTNAME/entities/university/students/12345`
+`DELETE http://localost:8080/ORGID/TENANTNAME/entities/university/students/12345`
 
 starts the "delete" process with the "id" argument equals to "12345"
 
