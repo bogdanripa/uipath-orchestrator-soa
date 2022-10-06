@@ -27,68 +27,100 @@ function sendError(res, err) {
 
 function getAuthDetailsP(req) {
 	return new Promise((resolve, reject) => {
-		var authToken;
-		if (req.authToken)
-			authToken = req.authToken;
-		else if (req.cookies && req.cookies.authToken)
-			authToken = req.cookies.authToken
-		else if (req.headers && req.headers.authorization)
-			authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
-		else {
-			// check for cached auth token for preset endpoints
-			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
-			if (req.params[0][0] != '/')
-				url += '/';
-			url += req.params[0];
+		(async () => {
+			try {
+				var authToken;
+				if (req.authToken)
+					authToken = req.authToken;
+				else if (req.cookies && req.cookies.authToken)
+					authToken = req.cookies.authToken
+				else if (req.headers && req.headers.authorization)
+					authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
+				else {
+					// check for cached auth token for preset endpoints
+					var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
+					if (req.params[0][0] != '/')
+						url += '/';
+					url += req.params[0];
 
-			if (presets.map[url] && presets.authKeys[presets.map[url]].authToken)
-				authToken = presets.authKeys[presets.map[url]].authToken;
-			else
-				authToken = "";
-		}
-		if (!authToken) {
-			authenticateP(req)
-				.then((authToken) => {
-					if (authToken && instances[authToken])
-						instances[authToken].lastAccessed = Date.now();
-					var ad = {
-						authToken: authToken,
-						orgId: req.params.orgId,
-						tenantName: req.params.tenantName
-					};
+					if (presets.map[url])
+						if (presets.authKeys[presets.map[url]].authToken)
+							if (presets.authKeys[presets.map[url]].authToken == 'loading') {
+								console.log("Waiting for authtoken");
+								await until(_ => presets.authKeys[presets.map[url]].authToken != 'loading');
+								authToken = presets.authKeys[presets.map[url]].authToken;
+							}
+							else
+								authToken = presets.authKeys[presets.map[url]].authToken;
+						else {
+							presets.authKeys[presets.map[url]].authToken = 'loading';
+							authToken = "";
+						}
+					else
+						authToken = "";
+				}
+				if (!authToken) {
+					authenticateP(req)
+						.then((authToken) => {
+							if (authToken && instances[authToken])
+								instances[authToken].lastAccessed = Date.now();
+							var ad = {
+								authToken: authToken,
+								orgId: req.params.orgId,
+								tenantName: req.params.tenantName
+							};
 
-					getOrchestratorP(ad)
-						.then((orchestrator) => {
-							resolve([ad, orchestrator]);
+							getOrchestratorP(ad)
+								.then((orchestrator) => {
+									resolve([ad, orchestrator]);
+								})
+								.catch((err) => {
+									reject(err);
+								});
 						})
 						.catch((err) => {
 							reject(err);
-						});
-				})
-				.catch((err) => {
-					reject(err);
-				})
-			return;
-		}
+						})
+					return;
+				}
 
-		if (authToken && instances[authToken])
-			instances[authToken].lastAccessed = Date.now();
+				if (instances[authToken] && !instances[authToken].loaded) {
+					// waiting to load
+					await until(_ => !instances[authToken] || instances[authToken].loaded);
+				}
 
-		var ad = {
-			authToken: authToken,
-			orgId: req.params.orgId,
-			tenantName: req.params.tenantName
-		};
+				if (instances[authToken])
+					instances[authToken].lastAccessed = Date.now();
 
-		getOrchestratorP(ad)
-			.then((orchestrator) => {
-				resolve([ad, orchestrator]);
-			})
-			.catch((err) => {
+				var ad = {
+					authToken: authToken,
+					orgId: req.params.orgId,
+					tenantName: req.params.tenantName
+				};
+
+				getOrchestratorP(ad)
+					.then((orchestrator) => {
+						resolve([ad, orchestrator]);
+					})
+					.catch((err) => {
+						reject(err);
+					});
+			} catch(err) {
 				reject(err);
-			});
+			}
+		})();
 	});
 }
+
+function until(conditionFunction) {
+  const poll = resolve => {
+    if(conditionFunction()) resolve();
+    else setTimeout(_ => poll(resolve), 1000);
+  }
+
+  return new Promise(poll);
+}
+
 
 function getOrchestratorP(ad) {
 	return new Promise((resolve, reject) => {
@@ -103,7 +135,8 @@ function getOrchestratorP(ad) {
 				folders: {},
 				processes: [],
 				queues: [],
-				entities: {}
+				entities: {},
+				loaded: false
 			};
 			initP(ad, orchestrator)
 				.then(() => {
