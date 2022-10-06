@@ -1,4 +1,4 @@
-const Orchestrator = require('uipath-orchestrator');
+const Orchestrator = require('./uipath-orchestrator/Orchestrator.js');
 
 module.exports.authenticateP = (orgId, tenantName, clientId, userKey, environment) => {
 	return new Promise((resolve, reject) => {

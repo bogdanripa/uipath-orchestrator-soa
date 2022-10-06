@@ -10,13 +10,14 @@ const path = require("path");
 const express = require('express');
 const request = require('request');
 const app = express();
-const port = 8081;
+const port = 8080;
 
 var instances = {};
 var callBacks = {};
 const presets = require("./presets.json");
 
 function sendError(res, err) {
+	console.error(err);
 	var status = 500, msg = "Internal error";
 	if (err.statusCode) {
 		status = err.statusCode;
@@ -34,9 +35,18 @@ function getAuthDetailsP(req) {
 			authToken = req.cookies.authToken
 		else if (req.headers && req.headers.authorization)
 			authToken = req.headers.authorization.replace(/^Bearer\s+/, '');
-		else
-			authToken = "";
+		else {
+			// check for cached auth token for preset endpoints
+			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
+			if (req.params[0][0] != '/')
+				url += '/';
+			url += req.params[0];
 
+			if (presets.map[url] && presets.authKeys[presets.map[url]].authToken)
+				authToken = presets.authKeys[presets.map[url]].authToken;
+			else
+				authToken = "";
+		}
 		if (!authToken) {
 			authenticateP(req)
 				.then((authToken) => {
@@ -103,6 +113,10 @@ function getOrchestratorP(ad) {
 				})
 				.catch((err) => {
 					delete instances[ad.authToken];
+					for (var authKey in presets.authKeys)
+						if (presets.authKeys[authKey].authToken == ad.authToken)
+							delete presets.authKeys[authKey].authToken;
+
 					reject(err);
 				});
 			return;
@@ -114,12 +128,11 @@ function getOrchestratorP(ad) {
 
 function authenticateP(req) {
 	return new Promise((resolve, reject) => {
+		var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
+		if (req.params[0][0] != '/')
+			url += '/';
+		url += req.params[0];
 		if (!req.body.orgId) {
-			var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
-			if (req.params[0][0] != '/')
-				url += '/';
-			url += req.params[0];
-			console.log(url);
 			if (presets.map[url]) {
 				req.body.orgId = req.params.orgId;
 				req.body.tenantName = req.params.tenantName;
@@ -130,6 +143,11 @@ function authenticateP(req) {
 		}
 		Orchestrator2.authenticateP(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
 			.then((authToken) => {
+				// save auth token for further use
+				if (presets.map[url]) {
+					presets.authKeys[presets.map[url]].authToken = authToken;
+				}
+
 				resolve(authToken);
 			})
 			.catch((err) => {
@@ -363,6 +381,10 @@ function refreshFolders(req, res) {
 			var ad = args[0];
 			var orchestrator = args[1];
 			delete instances[ad.authToken];
+			for (var authKey in presets.authKeys)
+				if (presets.authKeys[authKey].authToken == ad.authToken)
+					delete presets.authKeys[authKey].authToken;
+
 			getOrchestratorP(ad);
 			res.send({response: "Done"});
 		})
@@ -805,12 +827,16 @@ function processCallBacks() {
 setInterval(processCallBacks, 1000);
 
 function expireCache() {
-	for (t in instances) {
-		var instance = instances[t];
+	for (var authToken in instances) {
+		var instance = instances[authToken];
 		if (instance.lastAccessed) {
 			// delete cache after 1 hour of inactivity
-			if(Date.now() - instance.lastAccessed > 1000*60*60)
-				delete instances[t];
+			if(Date.now() - instance.lastAccessed > 1000*60*60) {
+				delete instances[authToken];
+				for (var authKey in presets.authKeys)
+					if (presets.authKeys[authKey].authToken == authToken)
+						delete presets.authKeys[authKey].authToken;
+			}
 		}
 	}
 }
