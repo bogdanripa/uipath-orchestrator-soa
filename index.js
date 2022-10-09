@@ -823,29 +823,39 @@ function processQueueItemCallback(id, response) {
 function processJobsWebhook(req, res) {
 	if (req.body.Jobs)
 		for (var job in req.body.Jobs) {
+			console.log("Received job callback for " + job.Id);
 			if (callBacks[job.Id]) {
 				callBacks[job.Id].checking = true;
 				processJobCallback(job.Id, job);
 			}
 		}
 	if (req.body.Job) {
-		callBacks[req.body.Job.Id].checking = true;
-		processJobCallback(req.body.Job.Id, req.body.Job);
+		console.log("Received job callback for " + req.body.Job.Id);
+		if (callBacks[req.body.Job.Id]) {
+			callBacks[req.body.Job.Id].checking = true;
+			processJobCallback(req.body.Job.Id, req.body.Job);
+		}
 	}
+	res.send('{status: "done"}');
 }
 
 function processQueueItensWebhook(req, res) {
 	if (req.body.QueueItems)
 		for (var qi in req.body.QueueItems) {
+			console.log("Received queue item callback for " + qi.Id);
 			if (callBacks[qi.Id]) {
 				callBacks[qi.Id].checking = true;
 				processQueueItemCallback(qi.Id, qi);
 			}
 		}
 	if (req.body.QueueItem) {
-		callBacks[req.body.QueueItem.Id].checking = true;
-		processQueueItemCallback(req.body.QueueItem.Id, req.body.QueueItem);
+		console.log("Received queue item callback for " + req.body.QueueItem.Id);
+		if (callBacks[req.body.QueueItem.Id]) {
+			callBacks[req.body.QueueItem.Id].checking = true;
+			processQueueItemCallback(req.body.QueueItem.Id, req.body.QueueItem);
+		}
 	}
+	res.send('{status: "done"}');
 }
 
 function processCallBacks() {
