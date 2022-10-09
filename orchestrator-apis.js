@@ -66,6 +66,50 @@ module.exports.getJobDetailsP = (orchestrator, ad) => {
 	});
 };
 
+
+module.exports.getWebHooksP = (orchestrator, ad, websiteUrl) => {
+	websiteUrl = websiteUrl.replace(/.*:\/\//, '');
+	return new Promise((resolve, reject) => {
+		var url = '/' + ad.orgId + '/' + ad.tenantName + "/orchestrator_/odata/Webhooks?$filter=((contains(Url,'"+websiteUrl+"')))";
+		console.log("GET " + url);
+		orchestrator.get(url, {}, function (err, data) {
+			if (err) {
+				console.error('Error: ' + err);
+				reject(err);
+				return;
+			}
+			resolve(data);
+		});
+	});
+};
+
+module.exports.addWebHookP = (orchestrator, ad, webHookURL, events) => {
+	return new Promise((resolve, reject) => {
+		var url = '/' + ad.orgId + '/' + ad.tenantName + "/orchestrator_/odata/Webhooks";
+		console.log("POST " + url);
+		var data = {
+			"Url":webHookURL,
+			"Enabled":true,
+			"Secret":null,
+			"SubscribeToAllEvents":false,
+			"AllowInsecureSsl":false,
+			"Events": events
+		};
+
+		orchestrator.post(url, data, function (err, data) {
+			if (err) {
+				console.error('Error: ' + err);
+				reject(err);
+				return;
+			}
+			resolve(data);
+		});
+	});
+};
+
+
+
+
 module.exports.getTransactionStatusP = (orchestrator, ad, fID) => {
 	return new Promise((resolve, reject) => {
 		var url = '/' + ad.orgId + '/' + ad.tenantName + '/orchestrator_/odata/QueueItems('+ad.id+')';

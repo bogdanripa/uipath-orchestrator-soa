@@ -9,7 +9,7 @@ const path = require("path");
 const express = require('express');
 const request = require('request');
 const app = express();
-const port = 8080;
+const port = process.env.PORT?process.env.PORT:8080;
 
 var instances = {};
 var callBacks = {};
@@ -160,11 +160,12 @@ function getOrchestratorP(ad) {
 
 function authenticateP(req) {
 	return new Promise((resolve, reject) => {
-		var url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
-		if (req.params[0][0] != '/')
-			url += '/';
-		url += req.params[0];
+		var url = "";
 		if (!req.body.orgId) {
+			url = "/" + req.params.orgId + "/" + req.params.tenantName + "/processes";
+			if (req.params[0] && req.params[0][0] && req.params[0][0] != '/')
+				url += '/';
+			url += req.params[0];
 			if (presets.map[url]) {
 				req.body.orgId = req.params.orgId;
 				req.body.tenantName = req.params.tenantName;
@@ -176,7 +177,7 @@ function authenticateP(req) {
 		Orchestrator.authenticateP(req.body.orgId, req.body.tenantName, req.body.clientId, req.body.userKey, req.body.environment)
 			.then((authToken) => {
 				// save auth token for further use
-				if (presets.map[url]) {
+				if (url != '' && presets.map[url]) {
 					presets.authKeys[presets.map[url]].authToken = authToken;
 				}
 
@@ -775,6 +776,78 @@ function getQueueHtml(req, res) {
 	res.sendFile(path.join(__dirname, 'public/queue.html'));
 }
 
+
+function processJobCallback(id, response) {
+	if (response.EndTime) {
+		if (response.Result)
+			response.Result = cleanUpEntities(response.Result);
+		else 
+			if (response.OutputArguments)
+				response.Result = response.OutputArguments;
+
+		if(response.State == 'Faulted') {
+			delete response.Result;
+		}
+		if (!callBacks[id].res) {
+			// async
+			request.post(callBacks[id].callBackURL, {json: response.Result?response.Result:response}, (err, res, data) => {
+				if (err) console.error("Error callback'ing: " + err);
+			});
+		} else {
+			//sync
+			callBacks[id].res.status(200).send(response.Result?response.Result:response);
+		}
+		delete callBacks[id];
+	}
+	else
+		callBacks[id].checking = false;
+}
+
+function processQueueItemCallback(id, response) {
+	if(response.Status == "New" || response.Status == "InProgress") {
+		callBacks[id].checking = false;
+		return;
+	}
+	if (!callBacks[id].res) {
+		// async
+		request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
+				if (err) console.error("Error callback'ing: " + err);
+			});
+	} else {
+		//sync
+		callBacks[id].res.status(200).send(response);
+	}
+	delete callBacks[id];
+}
+
+function processJobsWebhook(req, res) {
+	if (req.body.Jobs)
+		for (var job in req.body.Jobs) {
+			if (callBacks[job.Id]) {
+				callBacks[job.Id].checking = true;
+				processJobCallback(job.Id, job);
+			}
+		}
+	if (req.body.Job) {
+		callBacks[req.body.Job.Id].checking = true;
+		processJobCallback(req.body.Job.Id, req.body.Job);
+	}
+}
+
+function processQueueItensWebhook(req, res) {
+	if (req.body.QueueItems)
+		for (var qi in req.body.QueueItems) {
+			if (callBacks[qi.Id]) {
+				callBacks[qi.Id].checking = true;
+				processQueueItemCallback(qi.Id, qi);
+			}
+		}
+	if (req.body.QueueItem) {
+		callBacks[req.body.QueueItem.Id].checking = true;
+		processQueueItemCallback(req.body.QueueItem.Id, req.body.QueueItem);
+	}
+}
+
 function processCallBacks() {
 	for (var id in callBacks) {
 		if (!callBacks[id].checking) {
@@ -784,25 +857,7 @@ function processCallBacks() {
 					.then((args) => {
 						var id = args[0];
 						var response = args[1];
-						if (response.EndTime) {
-							if (response.Result)
-								response.Result = cleanUpEntities(response.Result);
-							if(response.State == 'Faulted') {
-								delete response.Result;
-							}
-							if (!callBacks[id].res) {
-								// async
-								request.post(callBacks[id].callBackURL, {json: response.Result?response.Result:response}, (err, res, data) => {
-									if (err) console.error("Error callback'ing: " + err);
-								});
-							} else {
-								//sync
-								callBacks[id].res.status(200).send(response.Result?response.Result:response);
-							}
-							delete callBacks[id];
-						}
-						else
-							callBacks[id].checking = false;
+						processJobCallback(id, response);
 					})
 					.catch((args) => {
 						var id = args[0];
@@ -823,20 +878,7 @@ function processCallBacks() {
 					.then((args) => {
 						var id = args[0];
 						var response = args[1];
-						if(response.Status == "New" || response.Status == "InProgress") {
-							callBacks[id].checking = false;
-							return;
-						}
-						if (!callBacks[id].res) {
-							// async
-							request.post(callBacks[id].callBackURL, {json: response}, (err, res, data) => {
-									if (err) console.error("Error callback'ing: " + err);
-								});
-						} else {
-							//sync
-							callBacks[id].res.status(200).send(response);
-						}
-						delete callBacks[id];
+						processQueueItemCallback(id, response);
 					})
 					.catch((args) => {
 						var id = args[0];
@@ -856,7 +898,8 @@ function processCallBacks() {
 		}
 	}
 }
-setInterval(processCallBacks, 1000);
+setInterval(processCallBacks, 5000);
+
 
 function expireCache() {
 	for (var authToken in instances) {
@@ -922,6 +965,49 @@ function getStatus(req, res) {
 		});
 }
 
+function setup(req, res) {
+	getAuthDetailsP(req)
+		.then((args) => {
+			var ad = args[0];
+			var orchestrator = args[1];
+			if (instances[ad.authToken]) {
+				// setup webhooks
+				var websiteUrl = req.protocol + '://' + req.get('host');
+
+				Orchestrator.getWebHooksP(orchestrator, ad, websiteUrl)
+				.then((whList) => {
+					if (whList.value.length == 0) {
+						// add webhooks
+						Orchestrator.addWebHookP(orchestrator, ad, websiteUrl + '/webhooks/jobs', [{"EventType":"job.completed"},{"EventType":"job.faulted"},{"EventType":"job.stopped"}])
+						.then(() => {
+							Orchestrator.addWebHookP(orchestrator, ad, websiteUrl + '/webhooks/queueItems', [{"EventType":"queueItem.transactionCompleted"},{"EventType":"queueItem.transactionFailed"},{"EventType":"queueItem.transactionAbandoned"},{"EventType":"queueItem.transactionStarted"}])
+							.then(() => {
+								res.status(404).send({status: "DONE"});
+							})
+							.catch((err) => {
+								res.status(500).send({error: err});
+							});
+						})
+						.catch((err) => {
+							res.status(500).send({error: err});
+						});
+
+					}
+				})
+				.catch((err) => {
+					res.status(500).send({error: err});
+				});
+			}
+			else {
+				getOrchestratorP(ad);
+				res.status(404).send({error: "not found"});
+			}
+		})
+		.catch((err) => {
+			sendError(res, err);
+		});
+}
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
@@ -945,7 +1031,10 @@ app.patch('/:orgId/:tenantName/entities/*', postPatchEntities);
 app.get('/:orgId/:tenantName/jobs/:id', getJobStatus);
 app.get('/:orgId/:tenantName/transactions/*', getTransactionStatus);
 app.get('/:orgId/:tenantName/status', getStatus);
+app.get('/:orgId/:tenantName/setup', setup);
 app.post('/:orgId/:tenantName/auth', authenticate);
+app.post('/webhooks/jobs', processJobsWebhook);
+app.post('/webhooks/jobs', processQueueItensWebhook);
 
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`)
