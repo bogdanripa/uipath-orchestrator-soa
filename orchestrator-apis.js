@@ -149,7 +149,6 @@ module.exports.startProcessP = (ad, orchestrator, fID, process, ia) => {
 		    reject(err);
 		    return;
 		  }
-		  console.log("Job start requested.");
 		  resolve(data.value[0].Id);
 		});
 	});
