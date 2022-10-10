@@ -136,6 +136,7 @@ function getOrchestratorP(ad) {
 				processes: [],
 				queues: [],
 				entities: {},
+				for: ad.orgId + '/' + ad.tenantName,
 				loaded: false
 			};
 			initP(ad, orchestrator)
@@ -908,8 +909,6 @@ function processCallBacks() {
 		}
 	}
 }
-setInterval(processCallBacks, 10000);
-
 
 function expireCache() {
 	for (var authToken in instances) {
@@ -917,6 +916,8 @@ function expireCache() {
 		if (instance.lastAccessed) {
 			// delete cache after 1 hour of inactivity
 			if(Date.now() - instance.lastAccessed > 1000*60*60) {
+				// after 1 hour of inactivity
+				console.log("Expiring cache for " + instance.for);
 				delete instances[authToken];
 				for (var authKey in presets.authKeys)
 					if (presets.authKeys[authKey].authToken == authToken)
@@ -925,7 +926,6 @@ function expireCache() {
 		}
 	}
 }
-setInterval(expireCache, 1000*5*60);
 
 var swagger = new Document({
     description: "Swagger deffinition",
@@ -1049,3 +1049,6 @@ app.post('/webhooks/jobs', processQueueItensWebhook);
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`)
 });
+
+setInterval(processCallBacks, 10000); // check every 10 seconds
+setInterval(expireCache, 1000*5*60); // check every 5 minutes
